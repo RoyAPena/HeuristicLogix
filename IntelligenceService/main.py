@@ -109,8 +109,14 @@ else:
 
 
 
+
+
+
+
+
+
 class ExpertDecisionEvent(BaseModel):
-"""
+    """
 Event schema for expert decision overrides.
 MVP Contract: Includes all essential fields for logistics intelligence.
 """
@@ -171,6 +177,39 @@ class IntelligenceEnrichment(BaseModel):
     processing_time_ms: float
 
 
+
+
+
+
+
+
+class HistoricDeliveryEvent(BaseModel):
+    """
+Event schema for unit-aware historic delivery ingestion (batch mode).
+Used for building the AI knowledge base from past deliveries.
+Supports quantity/unit parsing and taxonomy-based weight calculation.
+"""
+delivery_date: str
+client_name: str
+raw_description: str  # Product description (may include quantity/unit if not parsed)
+quantity: Optional[float] = None  # Parsed quantity
+raw_unit: Optional[str] = None  # Parsed unit (BAG, M3, TON, etc.)
+calculated_weight: Optional[float] = None  # Weight from taxonomy (Quantity * WeightFactor)
+total_weight_kg: Optional[float] = None  # Final weight (calculated or provided)
+is_weight_calculated: bool = False  # Whether weight was calculated from taxonomy
+taxonomy_id: Optional[str] = None  # Product taxonomy ID if found
+is_taxonomy_verified: bool = False  # Whether taxonomy is expert-verified
+delivery_address: str
+latitude: float
+longitude: float
+truck_license_plate: str
+service_time_minutes: float
+expert_notes: Optional[str] = None
+override_reason: Optional[str] = None
+is_historic: bool = True
+ingestion_batch_id: str
+
+
 # Global Kafka consumer
 kafka_consumer: Optional[AIOKafkaConsumer] = None
 
@@ -225,13 +264,19 @@ async def consume_kafka_messages():
             topic = message.topic
             event_data = message.value
             
-            logger.info(f"Received event from topic '{topic}': {event_data.get('event_type', 'unknown')}")
+            logger.info(f"Received event from topic '{topic}': {event_data.get('type', event_data.get('event_type', 'unknown'))}")
             
             try:
-                if topic == "expert.decisions.v1":
+                # Check if this is a CloudEvent (has 'type' field) or legacy event
+                if "type" in event_data:
+                    # CloudEvent format
+                    await process_cloud_event(topic, event_data)
+                elif topic == "expert.decisions.v1":
                     await process_expert_decision(event_data)
                 elif topic == "heuristic.telemetry.v1":
                     await process_telemetry_event(event_data)
+                elif topic == "historic.deliveries.v1":
+                    await process_historic_delivery(event_data)
                 else:
                     logger.warning(f"Unknown topic: {topic}")
             except Exception as e:
@@ -240,6 +285,26 @@ async def consume_kafka_messages():
         logger.info("Kafka consumer task cancelled.")
     except Exception as e:
         logger.error(f"Fatal error in Kafka consumer: {e}", exc_info=True)
+
+
+async def process_cloud_event(topic: str, cloud_event: Dict[str, Any]):
+    """Process CloudEvent format messages."""
+    event_type = cloud_event.get("type", "")
+    event_data = cloud_event.get("data", {})
+    extensions = cloud_event.get("extensions", {})
+    
+    # Check if this is a historic event (batch mode)
+    is_historic = extensions.get("is_historic", "false").lower() == "true"
+    
+    if event_type == "HistoricDeliveryIngested":
+        await process_historic_delivery(event_data, is_historic)
+    elif "expert" in event_type.lower() or "decision" in event_type.lower():
+        await process_expert_decision(event_data)
+    elif "telemetry" in event_type.lower():
+        await process_telemetry_event(event_data)
+    else:
+        logger.warning(f"Unknown CloudEvent type: {event_type}")
+
 
 
 
@@ -396,7 +461,171 @@ Format your response as JSON with keys: tags, confidence_score, reasoning, sugge
         logger.error(f"Error processing telemetry event: {error}", exc_info=True)
 
 
+async def process_historic_delivery(event_data: Dict[str, Any], is_historic: bool = True):
+    """
+    Process unit-aware historic delivery event with pattern recognition focus (batch mode).
+    Handles quantity/unit parsing and taxonomy-based weight calculations.
+    
+    Args:
+        event_data: The historic delivery event data
+        is_historic: Whether this is a historic event (batch mode)
+    """
+    start_time = time.time()
+    
+    try:
+        delivery = HistoricDeliveryEvent(**event_data)
+        
+        # Generate unique event ID from batch ID and delivery details
+        event_id = f"{delivery.ingestion_batch_id}_{delivery.truck_license_plate}_{delivery.delivery_date}"
+        
+        # IDEMPOTENCY CHECK: Skip if already processed
+        if await check_enrichment_exists(event_id):
+            logger.warning(
+                f"Skipping historic delivery {event_id} - already enriched (idempotency)"
+            )
+            return
+        
+        # Determine if we have quantity/unit data
+        has_quantity_data = delivery.quantity is not None and delivery.raw_unit is not None
+        has_taxonomy = delivery.taxonomy_id is not None
+        weight_source = "calculated" if delivery.is_weight_calculated else "provided" if delivery.total_weight_kg else "missing"
+        
+        # BATCH MODE: Pattern recognition for historic data with unit awareness
+        if gemini_model and is_historic:
+            prompt = f"""
+Analyze this HISTORIC delivery record for pattern recognition and AI training (UNIT-AWARE):
 
+Product: {delivery.raw_description}
+Quantity: {delivery.quantity if delivery.quantity else 'Not provided'} {delivery.raw_unit if delivery.raw_unit else ''}
+Weight: {delivery.total_weight_kg if delivery.total_weight_kg else 'Not provided'} kg ({weight_source})
+Taxonomy Status: {'Verified' if delivery.is_taxonomy_verified else 'Pending' if has_taxonomy else 'Not found'}
+
+Delivery Date: {delivery.delivery_date}
+Client: {delivery.client_name}
+Address: {delivery.delivery_address}
+Truck: {delivery.truck_license_plate}
+Service Time: {delivery.service_time_minutes} minutes
+Expert Notes: {delivery.expert_notes or 'None'}
+Override Reason: {delivery.override_reason or 'None'}
+
+Task: Extract patterns and insights for AI knowledge base training with UNIT AWARENESS:
+
+1. Product identification and categorization
+   - What product category is "{delivery.raw_description}"? (AGGREGATE, CEMENT, STEEL, REBAR, etc.)
+   - Are there standard units for this product? (BAG, M3, TON, KG, PIECE, METER)
+   
+2. Weight calculation validation (if weight is {'calculated' if delivery.is_weight_calculated else 'provided'})
+   - Does the weight seem reasonable for this product and quantity?
+   - Estimate typical weight per unit for this product category
+   - Any anomalies in weight data?
+
+3. Quantity/Unit patterns
+   - Is the quantity typical for this product type?
+   - Is the unit measurement standard for this category?
+   - Any unit conversion insights?
+
+4. Capacity utilization by product
+   - Weight vs service time correlation for "{delivery.raw_description}"
+   - Truck type effectiveness for this product/quantity
+
+5. Expert decision patterns
+   - Why did expert assign this truck for "{delivery.raw_description}"?
+   - Any product-specific routing considerations?
+
+6. Taxonomy recommendations (if {'taxonomy exists but unverified' if has_taxonomy and not delivery.is_taxonomy_verified else 'no taxonomy'})
+   - Suggest standard product description
+   - Recommend weight factor (kg per unit)
+   - Suggest product category
+
+IMPORTANT: This is historic data for pattern learning, NOT real-time alerts.
+Focus on unit-aware product analysis and taxonomy building.
+
+Format your response as JSON with keys: 
+- product_category: str (AGGREGATE, CEMENT, STEEL, etc.)
+- suggested_standard_description: str (standardized product name)
+- suggested_weight_factor: float (kg per unit, or 0 if not applicable)
+- suggested_unit: str (BAG, M3, TON, etc.)
+- patterns: List[str] (identified patterns)
+- insights: str (key insights for training)
+- training_recommendations: List[str] (how to use this data)
+- capacity_score: float (0-100, how well utilized was the truck)
+- weight_validation: str (assessment of weight data quality)
+"""
+            
+            logger.info(
+                f"Processing unit-aware historic delivery (batch mode): {event_id} "
+                f"[Product: {delivery.raw_description}, Qty: {delivery.quantity} {delivery.raw_unit}, "
+                f"Weight: {weight_source}]"
+            )
+            
+            response = await asyncio.to_thread(
+                gemini_model.generate_content,
+                prompt
+            )
+            
+            # Parse AI response
+            ai_response = json.loads(response.text)
+            
+            processing_time_ms = (time.time() - start_time) * 1000
+            
+            # Extract patterns as tags, including product category and unit info
+            patterns = ai_response.get("patterns", [])
+            patterns.insert(0, f"PRODUCT:{delivery.raw_description}")
+            if delivery.quantity and delivery.raw_unit:
+                patterns.insert(1, f"UNIT:{delivery.raw_unit}")
+            if has_taxonomy:
+                patterns.insert(2, f"TAXONOMY:{'VERIFIED' if delivery.is_taxonomy_verified else 'PENDING'}")
+            
+            insights = ai_response.get("insights", "")
+            recommendations = ai_response.get("training_recommendations", [])
+            capacity_score = ai_response.get("capacity_score", 50.0)
+            weight_validation = ai_response.get("weight_validation", "")
+            
+            # Extract taxonomy recommendations from AI
+            suggested_description = ai_response.get("suggested_standard_description", delivery.raw_description)
+            suggested_weight_factor = ai_response.get("suggested_weight_factor", 0.0)
+            suggested_unit = ai_response.get("suggested_unit", delivery.raw_unit or "")
+            product_category = ai_response.get("product_category", "OTHER")
+            
+            # Combine insights with unit-aware analysis
+            full_reasoning = f"""Product: {delivery.raw_description}
+Category: {product_category}
+Quantity/Unit: {delivery.quantity} {delivery.raw_unit if delivery.raw_unit else 'N/A'}
+Weight: {delivery.total_weight_kg}kg ({weight_source})
+Taxonomy: {'Verified' if delivery.is_taxonomy_verified else 'Pending' if has_taxonomy else 'Not found'}
+
+Insights: {insights}
+
+Weight Validation: {weight_validation}
+
+AI Taxonomy Suggestions:
+- Standard Description: {suggested_description}
+- Weight Factor: {suggested_weight_factor} kg/unit
+- Standard Unit: {suggested_unit}
+"""
+            
+            enrichment = IntelligenceEnrichment(
+                event_id=event_id,
+                event_type="historic_delivery_unit_aware",
+                ai_tags=patterns,
+                ai_confidence_score=capacity_score,
+                ai_reasoning=full_reasoning,
+                ai_suggested_actions=recommendations,
+                processing_time_ms=processing_time_ms
+            )
+            
+            # Store enrichment in SQL Server
+            await store_enrichment(enrichment)
+            
+            logger.info(
+                f"Unit-aware historic delivery {event_id} enriched with {len(patterns)} patterns "
+                f"(Product: {delivery.raw_description}, Category: {product_category}, "
+                f"processing time: {processing_time_ms:.2f}ms, capacity score: {capacity_score})"
+            )
+        else:
+            logger.warning("AI enrichment skipped (Gemini not configured or not in batch mode)")
+    except Exception as error:
+        logger.error(f"Error processing unit-aware historic delivery: {error}", exc_info=True)
 
 
 async def store_enrichment(enrichment: IntelligenceEnrichment):
@@ -431,26 +660,13 @@ async def initialize_database():
     if not async_engine:
         return
     
+    
     try:
         async with async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables initialized")
     except Exception as error:
         logger.error(f"Error initializing database: {error}", exc_info=True)
-
-    
-    try:
-        def insert_enrichment():
-            conn = pyodbc.connect(SQLSERVER_CONNECTION_STRING)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'AIEnrichments')
-                CREATE TABLE AIEnrichments (
-                    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-                    EventId NVARCHAR(450) NOT NULL,
-                    EventType NVARCHAR(100) NOT NULL,
-                    AITags NVARCHAR(MAX),
 
 
 @app.get("/health")

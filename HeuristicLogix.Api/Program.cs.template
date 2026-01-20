@@ -49,9 +49,11 @@ builder.Services.AddDbContext<HeuristicLogixDbContext>(options =>
 // Register services
 builder.Services.AddSingleton<IOutboxEventNotifier, OutboxEventNotifier>();
 builder.Services.AddScoped<ITransactionalOutboxService, TransactionalOutboxService>();
+builder.Services.AddScoped<IDataIngestionService, DataIngestionService>();
 
 // Register background services
 builder.Services.AddHostedService<OutboxPublisherBackgroundService>();
+
 
 
 // Add CORS for Blazor WebAssembly

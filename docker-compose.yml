@@ -76,7 +76,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       KAFKA_CONSUMER_GROUP: "intelligence-workers"
-      KAFKA_TOPICS: "expert.decisions.v1,heuristic.telemetry.v1"
+      KAFKA_TOPICS: "expert.decisions.v1,heuristic.telemetry.v1,historic.deliveries.v1"
       GEMINI_API_KEY: "${GEMINI_API_KEY}"
       GEMINI_MODEL: "gemini-2.5-flash"
       LOG_LEVEL: "INFO"
@@ -87,8 +87,6 @@ services:
       - heuristiclogix-network
     depends_on:
       sqlserver:
-        condition: service_healthy
-      kafka:
         condition: service_healthy
       kafka:
         condition: service_healthy

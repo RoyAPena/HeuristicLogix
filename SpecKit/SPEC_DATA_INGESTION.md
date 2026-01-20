@@ -1,36 +1,98 @@
-\# SPEC\_DATA\_INGESTION: Ingesta de Datos MVP
+\# SPECKIT\_DATA\_INGESTION.md
 
 
 
-\## 1. Estrategia de Carga
+\## 1. STRATEGY \& BOUNDARIES
 
-\- \*\*Bulk Load:\*\* Importación vía Excel (.xlsx / .csv) para datos históricos de los últimos 6 meses.
+\- \*\*Domain:\*\* Logistics / Inventory
 
-\- \*\*Fast Entry:\*\* Formulario Blazor optimizado para teclado (sin usar mouse) para la operación diaria.
+\- \*\*Objective:\*\* Deterministic data capture for ERP training and operations.
 
+\- \*\*Modes:\*\* - Bulk Ingestion (Excel/CSV)
 
+&nbsp;   - Manual Ingestion (Blazor Fast-Entry)
 
-\## 2. Contrato de Datos de Entrada (Excel/Form)
-
-\- \*\*Fecha:\*\* DateTime (ISO).
-
-\- \*\*ClienteId:\*\* String (Relacionado con Finance).
-
-\- \*\*Items:\*\* Lista de productos y cantidades.
-
-\- \*\*CamionAsignado:\*\* ID del camión usado.
-
-\- \*\*DecisionExperto:\*\* Texto libre (El "Por qué" de tu padre).
+\- \*\*Status:\*\* Shadow Mode (Parallel Execution)
 
 
 
-\## 3. Flujo de Procesamiento
+\## 2. DATA CONTRACT (ENTITY\_MAP)
 
-1\. El Backend valida la estructura del Excel.
+| Field | Type | Required | Constraint |
 
-2\. Cada fila se convierte en un `ConduceCreatedEvent` en el Outbox.
+| :--- | :--- | :--- | :--- |
 
-3\. Kafka distribuye los eventos.
+| Fecha | DateTime | Yes | ISO 8601 |
 
-4\. El servicio de Python (Gemini) recibe los eventos en "batch" y genera etiquetas de patrones de decisión.
+| ClienteNombre | String | Yes | MaxLength(200) |
+
+| ProductoDescripcion | String | Yes | Raw Text Input |
+
+| Cantidad | Decimal | Yes | Precision(18,2) |
+
+| UnidadMedida | String | Yes | {Metro, Saco, Pala, Global} |
+
+| CamionPlaca | String | Yes | Regex(PlateFormat) |
+
+| DecisionExperto | String | No | MaxLength(1000) |
+
+
+
+\## 3. HUMAN-IN-THE-LOOP (HIL) FLOW
+
+1\. \*\*Discovery:\*\* Parser identifies unique `ProductoDescripcion` + `UnidadMedida`.
+
+2\. \*\*Pending State:\*\* New entries are persisted in `ProductTaxonomy` with `IsVerifiedByExpert = false`.
+
+3\. \*\*Data Tagging:\*\* All related `ConduceCreatedEvent` must include `HighUncertainty: true` until verified.
+
+4\. \*\*Expert Action:\*\* UI must allow manual override of `WeightFactor` and `Category`.
+
+
+
+\## 4. TECHNICAL IMPLEMENTATION (LOGISTICS MODULE)
+
+\- \*\*Library:\*\* MiniExcel (Streaming approach).
+
+\- \*\*Service:\*\* `ExcelIngestionService.cs`
+
+\- \*\*Pattern:\*\* Transactional Outbox.
+
+\- \*\*Standard:\*\* Explicit Typing, No `var`, Async/Await.
+
+
+
+\## 5. EVENT SCHEMA (KAFKA)
+
+\- \*\*Topic:\*\* `logistics.conduce.created`
+
+\- \*\*Header:\*\* `is\_historic: true`
+
+\- \*\*Payload:\*\*
+
+&nbsp;   ```json
+
+&nbsp;   {
+
+&nbsp;     "eventId": "Guid",
+
+&nbsp;     "timestamp": "DateTime",
+
+&nbsp;     "data": {
+
+&nbsp;       "client": "string",
+
+&nbsp;       "description": "string",
+
+&nbsp;       "quantity": "decimal",
+
+&nbsp;       "unit": "string",
+
+&nbsp;       "uncertainty": "bool"
+
+&nbsp;     }
+
+&nbsp;   }
+
+&nbsp;   ```
 

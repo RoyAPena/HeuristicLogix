@@ -1,0 +1,21 @@
+DeliveryDate,ClientName,RawDescription,Quantity,RawUnit,DeliveryAddress,Latitude,Longitude,TruckLicensePlate,TotalWeightKg,ServiceTimeMinutes,ExpertNotes,OverrideReason
+2024-01-15,Constructora ABC,Cemento Portland,50,BOLSA,Av Principal 123 Caracas,10.4806,-66.9036,XYZ-789,,45,Cliente frecuente con buen acceso,
+2024-01-15,Ferreteria XYZ,Agregado Arena,5,M3,Calle 2 con 3 Maracay,10.2469,-67.5958,ABC-456,,30,Primera entrega - verificar direccion,
+2024-01-16,Materiales SA,Acero Estructural,1.5,TON,Centro Comercial Valencia,10.1617,-68.0032,XYZ-789,1500.0,60,Entrega en almacen trasero,Camion mejor equipado para peso
+2024-01-16,Distribuidora Norte,Cabilla 12mm,200,PIEZA,Zona Industrial Barquisimeto,10.0647,-69.3570,DEF-123,,35,Cliente paga de contado,
+2024-01-17,Construcciones Sur,Agregado Piedra,4,M3,Urbanizacion El Paraiso,10.4986,-66.8544,ABC-456,,40,Requiere descarga rapida,
+2024-01-17,Aceros y Perfiles,Viga de Acero,2.2,TON,Av Libertador 456,10.5011,-66.9170,GHI-789,2200.0,75,Material pesado - requiere pluma,AI sugirio camion pequeno
+2024-01-18,Ferreteria Central,Cemento Rapido,30,BOLSA,Centro Comercial Los Ruices,10.4880,-66.8406,XYZ-789,,25,Entrega express,
+2024-01-18,Materiales Oriente,Cabilla 16mm,300,PIEZA,Calle Real Guarenas,10.4727,-66.6145,ABC-456,,50,Cliente importante,
+2024-01-19,Distribuidora Carabobo,Arena Lavada,6,M3,Zona Industrial Valencia,10.1804,-68.0041,DEF-123,,55,Acceso complicado por trafico,
+2024-01-19,Construcciones Imperio,Acero Corrugado,1.95,TON,Av Sucre Los Teques,10.3544,-67.0428,GHI-789,1950.0,65,Proyecto de largo plazo,
+2024-01-22,Ferreteria La Pradera,Cemento Gris,35,BOLSA,Av Universidad Caracas,10.4896,-66.8938,XYZ-789,,32,Zona residencial,
+2024-01-22,Aceros del Centro,Cabilla 20mm,250,PIEZA,Parque Industrial,10.2333,-67.5750,ABC-456,,60,Descarga mecanizada,
+2024-01-23,Materiales Premium,Piedra Picada,3.5,M3,Centro Ciudad,10.5072,-66.9135,DEF-123,,45,Cliente Gold,
+2024-01-23,Distribuidora Anzoategui,Perfil de Acero,1.1,TON,Zona Este Barcelona,10.1341,-64.6861,GHI-789,1100.0,42,Primera vez en esta zona,AI subestimo distancia
+2024-01-24,Construcciones Delta,Cemento Blanco,40,BOLSA,Av Bolivar Maracaibo,10.6316,-71.6402,XYZ-789,,48,Buen cliente historico,
+2024-01-24,Ferreteria Moderna,Grava,3,M3,Centro Comercial Sambil,10.4961,-66.8472,ABC-456,,35,Entrega en horario pico,
+2024-01-25,Aceros y Tubos,Tubo de Acero,2.1,TON,Zona Industrial,10.1750,-68.0025,DEF-123,2100.0,70,Material especializado,
+2024-01-25,Materiales Express,Cabilla 8mm,180,PIEZA,Av Intercomunal,10.4750,-66.9125,GHI-789,,46,Entrega parcial,
+2024-01-26,Distribuidora Sur,Cemento Estructural,45,BOLSA,Calle Principal Guarenas,10.4689,-66.6203,XYZ-789,,38,Cliente recurrente,
+2024-01-26,Construcciones Futuro,Arena de Rio,5.5,M3,Urbanizacion Los Naranjos,10.4833,-66.8333,ABC-456,,58,Proyecto residencial,Mejor capacidad de carga

@@ -1,0 +1,326 @@
+@page "/taxonomy"
+@using HeuristicLogix.Shared.DTOs
+@using HeuristicLogix.Client.Services
+@inject ITaxonomyService TaxonomyService
+@inject ISnackbar Snackbar
+
+<PageTitle>Gestión de Taxonomía - HeuristicLogix</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.Category" Class="mr-2" />
+        Gestión de Taxonomía de Productos
+    </MudText>
+
+    @* Statistics Cards *@
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.h5">@_stats.Total</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Total Productos</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.h5" Color="Color.Warning">@_stats.Pending</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Pendientes Verificación</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.h5" Color="Color.Success">@_stats.Verified</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Verificados</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    @* Filters *@
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudSelect @bind-Value="_filterVerified" Label="Estado" Variant="Variant.Outlined" T="bool?">
+                    <MudSelectItem Value="@((bool?)null)">Todos</MudSelectItem>
+                    <MudSelectItem Value="@false">Pendientes</MudSelectItem>
+                    <MudSelectItem Value="@true">Verificados</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect @bind-Value="_filterCategory" Label="Categoría" Variant="Variant.Outlined" T="string">
+                    <MudSelectItem Value="@((string?)null)">Todas</MudSelectItem>
+                    <MudSelectItem Value="@("CEMENT")">CEMENT</MudSelectItem>
+                    <MudSelectItem Value="@("AGGREGATE")">AGGREGATE</MudSelectItem>
+                    <MudSelectItem Value="@("STEEL")">STEEL</MudSelectItem>
+                    <MudSelectItem Value="@("REBAR")">REBAR</MudSelectItem>
+                    <MudSelectItem Value="@("OTHER")">OTHER</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudTextField @bind-Value="_searchTerm" Label="Buscar" Variant="Variant.Outlined"
+                              Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" />
+            </MudItem>
+        </MudGrid>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadTaxonomiesAsync" Class="mt-2">
+            Aplicar Filtros
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" OnClick="ClearFilters" Class="mt-2 ml-2">
+            Limpiar
+        </MudButton>
+    </MudPaper>
+
+    @* Data Grid *@
+    <MudDataGrid T="TaxonomyDto" Items="@_taxonomies" Filterable="false" SortMode="SortMode.None"
+                 Loading="@_loading" Dense="true" Hover="true" Striped="true" Elevation="2">
+        
+        <Columns>
+            <PropertyColumn Property="x => x.Description" Title="Descripción" />
+            
+            <PropertyColumn Property="x => x.Category" Title="Categoría">
+                <CellTemplate>
+                    <MudChip Size="Size.Small" Color="GetCategoryColor(context.Item.Category)">
+                        @context.Item.Category
+                    </MudChip>
+                </CellTemplate>
+            </PropertyColumn>
+            
+            <PropertyColumn Property="x => x.WeightFactor" Title="Factor Peso (kg/unidad)" Format="F2" />
+            
+            <PropertyColumn Property="x => x.StandardUnit" Title="Unidad" />
+            
+            <PropertyColumn Property="x => x.UsageCount" Title="Uso" />
+            
+            <PropertyColumn Property="x => x.IsVerifiedByExpert" Title="Verificado">
+                <CellTemplate>
+                    @if (context.Item.IsVerifiedByExpert)
+                    {
+                        <MudChip Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">
+                            Verificado
+                        </MudChip>
+                    }
+                    else
+                    {
+                        <MudChip Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">
+                            Pendiente
+                        </MudChip>
+                    }
+                </CellTemplate>
+            </PropertyColumn>
+            
+            <TemplateColumn Title="Acciones" Sortable="false">
+                <CellTemplate>
+                    @if (!context.Item.IsVerifiedByExpert)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                   OnClick="@(() => OpenVerifyDialog(context.Item))">
+                            Aprobar
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @context.Item.VerifiedBy<br />
+                            @context.Item.VerifiedAt?.ToString("dd/MM/yyyy")
+                        </MudText>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+
+        <PagerContent>
+            <MudDataGridPager T="TaxonomyDto" />
+        </PagerContent>
+    </MudDataGrid>
+</MudContainer>
+
+@* Verify Dialog *@
+<MudDialog @bind-IsVisible="_showVerifyDialog" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Verified" Class="mr-2" />
+            Verificar Producto
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_selectedTaxonomy != null)
+        {
+            <MudStack Spacing="3">
+                <MudTextField @bind-Value="_selectedTaxonomy.Description" Label="Descripción" ReadOnly="true" />
+                
+                <MudTextField @bind-Value="_verifyWeightFactor" Label="Factor de Peso (kg/unidad)" 
+                              Variant="Variant.Outlined" Immediate="true" Format="F2" 
+                              HelperText="Peso en kg por unidad de medida" />
+                
+                <MudSelect @bind-Value="_verifyCategory" Label="Categoría" Variant="Variant.Outlined" T="string">
+                    <MudSelectItem Value="@("CEMENT")">CEMENT</MudSelectItem>
+                    <MudSelectItem Value="@("AGGREGATE")">AGGREGATE</MudSelectItem>
+                    <MudSelectItem Value="@("STEEL")">STEEL</MudSelectItem>
+                    <MudSelectItem Value="@("REBAR")">REBAR</MudSelectItem>
+                    <MudSelectItem Value="@("BLOCKS")">BLOCKS</MudSelectItem>
+                    <MudSelectItem Value="@("PIPES")">PIPES</MudSelectItem>
+                    <MudSelectItem Value="@("LUMBER")">LUMBER</MudSelectItem>
+                    <MudSelectItem Value="@("OTHER")">OTHER</MudSelectItem>
+                </MudSelect>
+                
+                <MudSelect @bind-Value="_verifyUnit" Label="Unidad Estándar" Variant="Variant.Outlined" T="string">
+                    <MudSelectItem Value="@("BOLSA")">BOLSA</MudSelectItem>
+                    <MudSelectItem Value="@("M3")">M3</MudSelectItem>
+                    <MudSelectItem Value="@("TON")">TON</MudSelectItem>
+                    <MudSelectItem Value="@("PIEZA")">PIEZA</MudSelectItem>
+                    <MudSelectItem Value="@("METRO")">METRO</MudSelectItem>
+                    <MudSelectItem Value="@("KG")">KG</MudSelectItem>
+                </MudSelect>
+                
+                <MudTextField @bind-Value="_verifyNotes" Label="Notas" Variant="Variant.Outlined" 
+                              Lines="3" />
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CloseVerifyDialog">Cancelar</MudButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled" OnClick="VerifyTaxonomyAsync"
+                   Disabled="@_verifying">
+            @if (_verifying)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                <span class="ml-2">Verificando...</span>
+            }
+            else
+            {
+                <span>Verificar</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _loading = true;
+    private List<TaxonomyDto> _taxonomies = new List<TaxonomyDto>();
+    private TaxonomyStatsDto _stats = new TaxonomyStatsDto();
+    
+    // Filters (explicit typing - no var)
+    private bool? _filterVerified = false; // Default: show only pending
+    private string? _filterCategory = null;
+    private string? _searchTerm = null;
+    
+    // Verify dialog
+    private bool _showVerifyDialog = false;
+    private TaxonomyDto? _selectedTaxonomy = null;
+    private decimal _verifyWeightFactor = 0;
+    private string _verifyCategory = "OTHER";
+    private string _verifyUnit = "BOLSA";
+    private string _verifyNotes = string.Empty;
+    private bool _verifying = false;
+    
+    private DialogOptions _dialogOptions = new DialogOptions 
+    { 
+        MaxWidth = MaxWidth.Small, 
+        FullWidth = true,
+        CloseButton = true
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStatsAsync();
+        await LoadTaxonomiesAsync();
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        _stats = await TaxonomyService.GetStatsAsync();
+    }
+
+    private async Task LoadTaxonomiesAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        
+        _taxonomies = await TaxonomyService.GetTaxonomiesAsync(
+            isVerified: _filterVerified,
+            category: _filterCategory,
+            searchTerm: _searchTerm,
+            sortBy: "UsageCount",
+            descending: true);
+        
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task ClearFilters()
+    {
+        _filterVerified = false;
+        _filterCategory = null;
+        _searchTerm = null;
+        await LoadTaxonomiesAsync();
+    }
+
+    private void OpenVerifyDialog(TaxonomyDto taxonomy)
+    {
+        _selectedTaxonomy = taxonomy;
+        _verifyWeightFactor = taxonomy.WeightFactor;
+        _verifyCategory = taxonomy.Category;
+        _verifyUnit = taxonomy.StandardUnit ?? "BOLSA";
+        _verifyNotes = taxonomy.Notes ?? string.Empty;
+        _showVerifyDialog = true;
+    }
+
+    private void CloseVerifyDialog()
+    {
+        _showVerifyDialog = false;
+        _selectedTaxonomy = null;
+    }
+
+    private async Task VerifyTaxonomyAsync()
+    {
+        if (_selectedTaxonomy == null) return;
+        
+        _verifying = true;
+        StateHasChanged();
+
+        VerifyTaxonomyRequest request = new VerifyTaxonomyRequest
+        {
+            TaxonomyId = _selectedTaxonomy.Id,
+            WeightFactor = _verifyWeightFactor,
+            Category = _verifyCategory,
+            StandardUnit = _verifyUnit,
+            Notes = _verifyNotes,
+            VerifiedBy = "Expert" // TODO: Get from auth context
+        };
+
+        VerifyTaxonomyResponse response = await TaxonomyService.VerifyTaxonomyAsync(request);
+
+        if (response.Success)
+        {
+            Snackbar.Add($"Taxonomía verificada: {_selectedTaxonomy.Description}", Severity.Success);
+            CloseVerifyDialog();
+            await LoadStatsAsync();
+            await LoadTaxonomiesAsync();
+        }
+        else
+        {
+            Snackbar.Add($"Error: {response.ErrorMessage}", Severity.Error);
+        }
+
+        _verifying = false;
+        StateHasChanged();
+    }
+
+    private Color GetCategoryColor(string category)
+    {
+        return category.ToUpper() switch
+        {
+            "CEMENT" => Color.Primary,
+            "AGGREGATE" => Color.Secondary,
+            "STEEL" => Color.Info,
+            "REBAR" => Color.Success,
+            "BLOCKS" => Color.Warning,
+            "PIPES" => Color.Tertiary,
+            "LUMBER" => Color.Dark,
+            _ => Color.Default
+        };
+    }
+}

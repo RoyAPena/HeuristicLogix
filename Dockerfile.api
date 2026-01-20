@@ -1,0 +1,71 @@
+# HeuristicLogix API - Multi-Stage Dockerfile
+# .NET 10 Modular Monolith with Production Optimizations
+
+# ============================================================================
+# Stage 1: Build Environment
+# ============================================================================
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+# Copy solution and project files
+COPY ["HeuristicLogix.sln", "./"]
+COPY ["HeuristicLogix.Api/HeuristicLogix.Api.csproj", "HeuristicLogix.Api/"]
+COPY ["HeuristicLogix.Shared/HeuristicLogix.Shared.csproj", "HeuristicLogix.Shared/"]
+COPY ["HeuristicLogix.Modules.Logistics/HeuristicLogix.Modules.Logistics.csproj", "HeuristicLogix.Modules.Logistics/"]
+
+# Restore dependencies
+RUN dotnet restore "HeuristicLogix.Api/HeuristicLogix.Api.csproj"
+
+# Copy all source files
+COPY . .
+
+# Build project
+WORKDIR "/src/HeuristicLogix.Api"
+ARG BUILDCONFIG=Release
+RUN dotnet build "HeuristicLogix.Api.csproj" \
+    -c $BUILDCONFIG \
+    -o /app/build \
+    --no-restore
+
+# ============================================================================
+# Stage 2: Publish
+# ============================================================================
+FROM build AS publish
+ARG BUILDCONFIG=Release
+RUN dotnet publish "HeuristicLogix.Api.csproj" \
+    -c $BUILDCONFIG \
+    -o /app/publish \
+    --no-build \
+    --no-restore \
+    /p:UseAppHost=false
+
+# ============================================================================
+# Stage 3: Runtime Environment
+# ============================================================================
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+WORKDIR /app
+
+# Install curl for healthchecks
+RUN apt-get update && \
+    apt-get install -y curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy published application
+COPY --from=publish /app/publish .
+
+# Create non-root user for security
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose API port
+EXPOSE 5000
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD curl --fail http://localhost:5000/health || exit 1
+
+# Entry point
+ENTRYPOINT ["dotnet", "HeuristicLogix.Api.dll"]

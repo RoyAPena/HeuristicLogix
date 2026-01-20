@@ -1,0 +1,286 @@
+# HeuristicLogix - Docker Compose Orchestration
+# Production-Ready Multi-Service Architecture
+
+version: '3.9'
+
+# Named volumes for data persistence
+volumes:
+  sql_data:
+    name: sql_data
+    driver: local
+  kafka_logs:
+    name: kafka_logs
+    driver: local
+  zk_data:
+    name: zk_data
+    driver: local
+  ai_model_cache:
+    name: ai_model_cache
+    driver: local
+
+# Isolated bridge network
+networks:
+  heuristic_net:
+    name: heuristic_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+          gateway: 172.28.0.1
+
+services:
+  # ============================================================================
+  # Database Service - SQL Server 2022
+  # ============================================================================
+  db_sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: heuristiclogix-db
+    hostname: db_sql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SQLSERVER_PASSWORD:-HeuristicLogix2026!}"
+      MSSQL_PID: "Developer"
+      MSSQL_TCP_PORT: 1433
+      MSSQL_AGENT_ENABLED: "true"
+      MSSQL_COLLATION: "Latin1_General_CI_AS"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+    networks:
+      heuristic_net:
+        ipv4_address: 172.28.0.10
+    restart: unless-stopped
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -Q "SELECT 1" || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+
+  # ============================================================================
+  # Zookeeper Service - Kafka Coordination
+  # ============================================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: heuristiclogix-zookeeper
+    hostname: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 5
+      ZOOKEEPER_INIT_LIMIT: 10
+      ZOOKEEPER_MAX_CLIENT_CNXNS: 60
+      ZOOKEEPER_AUTOPURGE_SNAP_RETAIN_COUNT: 3
+      ZOOKEEPER_AUTOPURGE_PURGE_INTERVAL: 24
+    ports:
+      - "2181:2181"
+    volumes:
+      - zk_data:/var/lib/zookeeper/data
+      - zk_data:/var/lib/zookeeper/log
+    networks:
+      heuristic_net:
+        ipv4_address: 172.28.0.20
+    restart: unless-stopped
+    healthcheck:
+      test: echo stat | nc localhost 2181 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============================================================================
+  # Kafka Service - Event Bus
+  # ============================================================================
+  kafka_bus:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: heuristiclogix-kafka
+    hostname: kafka_bus
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka_bus:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    volumes:
+      - kafka_logs:/var/lib/kafka/data
+    networks:
+      heuristic_net:
+        ipv4_address: 172.28.0.30
+    restart: unless-stopped
+    healthcheck:
+      test: kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # ============================================================================
+  # API Service - .NET 10 Modular Monolith
+  # ============================================================================
+  api_logistics:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      args:
+        BUILDCONFIG: Release
+    image: heuristiclogix/api:latest
+    container_name: heuristiclogix-api
+    hostname: api_logistics
+    depends_on:
+      db_sql:
+        condition: service_healthy
+      kafka_bus:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: "http://+:5000"
+      ConnectionStrings__DefaultConnection: "Server=db_sql,1433;Database=HeuristicLogixDB;User Id=sa;Password=$${SQLSERVER_PASSWORD:-HeuristicLogix2026!};TrustServerCertificate=True;MultipleActiveResultSets=True;"
+      Kafka__BootstrapServers: "kafka_bus:9092"
+      Kafka__TopicExpertDecisions: "expert.decisions.v1"
+      Kafka__TopicHistoricDeliveries: "historic.deliveries.v1"
+      Logging__LogLevel__Default: "Information"
+      Logging__LogLevel__Microsoft.AspNetCore: "Warning"
+      TZ: "America/Santo_Domingo"
+    ports:
+      - "5000:5000"
+    networks:
+      heuristic_net:
+        ipv4_address: 172.28.0.40
+    restart: unless-stopped
+    healthcheck:
+      test: curl --fail http://localhost:5000/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============================================================================
+  # UI Service - Blazor WebAssembly
+  # ============================================================================
+  ui_blazor:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+      args:
+        BUILDCONFIG: Release
+    image: heuristiclogix/ui:latest
+    container_name: heuristiclogix-ui
+    hostname: ui_blazor
+    depends_on:
+      api_logistics:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: "http://+:5001"
+      API_BASE_URL: "http://api_logistics:5000"
+    ports:
+      - "5001:5001"
+    networks:
+      heuristic_net:
+        ipv4_address: 172.28.0.50
+    restart: unless-stopped
+    healthcheck:
+      test: curl --fail http://localhost:5001 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============================================================================
+  # AI Service - Python FastAPI + Gemini
+  # ============================================================================
+  ai_brain:
+    build:
+      context: ./IntelligenceService
+      dockerfile: Dockerfile
+    image: heuristiclogix/ai:latest
+    container_name: heuristiclogix-ai
+    hostname: ai_brain
+    depends_on:
+      kafka_bus:
+        condition: service_healthy
+      db_sql:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "kafka_bus:9092"
+      KAFKA_TOPIC_EXPERT_DECISIONS: "expert.decisions.v1"
+      KAFKA_TOPIC_HISTORIC_DELIVERIES: "historic.deliveries.v1"
+      KAFKA_CONSUMER_GROUP: "heuristiclogix-intelligence"
+      SQLSERVER_CONNECTION_STRING: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=db_sql,1433;DATABASE=HeuristicLogixDB;UID=sa;PWD=$${SQLSERVER_PASSWORD:-HeuristicLogix2026!};TrustServerCertificate=yes;"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-your-api-key-here}"
+      GEMINI_MODEL: "gemini-2.0-flash-exp"
+      LOG_LEVEL: "INFO"
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ai_model_cache:/app/cache
+    networks:
+      heuristic_net:
+        ipv4_address: 172.28.0.60
+    restart: unless-stopped
+    healthcheck:
+      test: curl --fail http://localhost:8000/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M

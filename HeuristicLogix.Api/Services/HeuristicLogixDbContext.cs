@@ -20,6 +20,7 @@ public class HeuristicLogixDbContext : DbContext
     public DbSet<ExpertHeuristicFeedback> ExpertFeedbacks => Set<ExpertHeuristicFeedback>();
     public DbSet<DeliveryRoute> DeliveryRoutes => Set<DeliveryRoute>();
     public DbSet<MaterialItem> MaterialItems => Set<MaterialItem>();
+    public DbSet<ProductTaxonomy> ProductTaxonomies => Set<ProductTaxonomy>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -146,6 +147,25 @@ public class HeuristicLogixDbContext : DbContext
 
             entity.HasIndex(e => e.Name);
             entity.HasIndex(e => e.Category);
+        });
+
+        // Configure ProductTaxonomy
+        modelBuilder.Entity<ProductTaxonomy>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Description).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.Category).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.WeightFactor).HasPrecision(18, 4);
+            entity.Property(e => e.StandardUnit).HasMaxLength(50);
+            entity.Property(e => e.IsVerifiedByExpert).IsRequired();
+            entity.Property(e => e.UsageCount).IsRequired();
+            entity.Property(e => e.Notes).HasMaxLength(2000);
+            entity.Property(e => e.VerifiedBy).HasMaxLength(450);
+
+            entity.HasIndex(e => e.Description).IsUnique();
+            entity.HasIndex(e => e.Category);
+            entity.HasIndex(e => e.IsVerifiedByExpert);
+            entity.HasIndex(e => e.UsageCount);
         });
     }
 }

@@ -1,0 +1,26 @@
+@* Add to NavMenu.razor or create a new TacticalDashboard section *@
+
+<MudNavGroup Title="Gestión Táctica" Icon="@Icons.Material.Filled.Dashboard" Expanded="true">
+    <MudNavLink Href="/excel-uploader" Icon="@Icons.Material.Filled.UploadFile" Match="NavLinkMatch.All">
+        Carga Masiva
+    </MudNavLink>
+    <MudNavLink Href="/taxonomy" Icon="@Icons.Material.Filled.Category" Match="NavLinkMatch.All">
+        Gestión Taxonomía
+        @if (_pendingCount > 0)
+        {
+            <MudBadge Content="@_pendingCount" Color="Color.Warning" Overlap="true">
+                <MudIcon Icon="@Icons.Material.Filled.Category" />
+            </MudBadge>
+        }
+    </MudNavLink>
+</MudNavGroup>
+
+@code {
+    private int _pendingCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TODO: Load pending count from API
+        await Task.CompletedTask;
+    }
+}
