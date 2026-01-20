@@ -366,3 +366,7 @@ venv/
 .venv/
 __pycache__/
 *.pyc
+/infrastructure/terraform/.terraform/providers/registry.terraform.io/kreuzwerker/docker/3.6.2/windows_amd64
+/infrastructure/terraform/.terraform/providers/registry.terraform.io/hashicorp/local/2.6.1/windows_amd64
+/infrastructure/terraform
+/.env
