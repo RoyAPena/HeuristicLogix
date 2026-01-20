@@ -1,0 +1,70 @@
+namespace HeuristicLogix.Shared.Domain;
+
+/// <summary>
+/// Base class for all domain entities in HeuristicLogix.
+/// Provides unique identity for domain objects.
+/// </summary>
+public abstract class Entity
+{
+    /// <summary>
+    /// Unique identifier for the entity.
+    /// </summary>
+    public required Guid Id { get; init; }
+
+    /// <summary>
+    /// Equality comparison based on Id.
+    /// </summary>
+    public override bool Equals(object? obj)
+    {
+        if (obj is not Entity other)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
+
+        if (GetType() != other.GetType())
+        {
+            return false;
+        }
+
+        return Id == other.Id;
+    }
+
+    /// <summary>
+    /// Hash code based on Id.
+    /// </summary>
+    public override int GetHashCode()
+    {
+        return Id.GetHashCode();
+    }
+
+    /// <summary>
+    /// Equality operator.
+    /// </summary>
+    public static bool operator ==(Entity? left, Entity? right)
+    {
+        if (left is null && right is null)
+        {
+            return true;
+        }
+
+        if (left is null || right is null)
+        {
+            return false;
+        }
+
+        return left.Equals(right);
+    }
+
+    /// <summary>
+    /// Inequality operator.
+    /// </summary>
+    public static bool operator !=(Entity? left, Entity? right)
+    {
+        return !(left == right);
+    }
+}

@@ -1,10 +1,14 @@
 ﻿using System.Text.Json.Serialization;
+using HeuristicLogix.Shared.Domain;
 
 namespace HeuristicLogix.Shared.Models;
 
-public class Conduce
+/// <summary>
+/// Conduce (Delivery Order) aggregate root.
+/// Represents a delivery order in the logistics workflow.
+/// </summary>
+public class Conduce : AggregateRoot
 {
-    public required Guid Id { get; init; }
     public required string ClientName { get; set; }
     public required string RawAddress { get; set; }
 
@@ -20,7 +24,110 @@ public class Conduce
     public double? ActualServiceTime { get; set; }
     public string? ExpertDecisionNote { get; set; }
 
-    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+    // Navigation properties
+    public Guid? AssignedTruckId { get; set; }
+    public Guid? RouteId { get; set; }
+
+    /// <summary>
+    /// Creates a new Conduce and raises ConduceCreated event.
+    /// </summary>
+    public static Conduce Create(
+        string clientName,
+        string rawAddress,
+        double latitude,
+        double longitude,
+        string? createdBy = null)
+    {
+        Conduce conduce = new Conduce
+        {
+            Id = Guid.NewGuid(),
+            ClientName = clientName,
+            RawAddress = rawAddress,
+            Latitude = latitude,
+            Longitude = longitude,
+            Status = ConduceStatus.Pending,
+            CreatedBy = createdBy
+        };
+
+        conduce.RaiseDomainEvent(new ConduceCreatedEvent
+        {
+            ConduceId = conduce.Id,
+            ClientName = clientName,
+            Address = rawAddress,
+            Latitude = latitude,
+            Longitude = longitude
+        });
+
+        return conduce;
+    }
+
+    /// <summary>
+    /// Assigns a truck to this conduce.
+    /// </summary>
+    public void AssignTruck(Guid truckId, string? assignedBy = null)
+    {
+        AssignedTruckId = truckId;
+        Status = ConduceStatus.Scheduled;
+        LastModifiedAt = DateTimeOffset.UtcNow;
+        LastModifiedBy = assignedBy;
+
+        RaiseDomainEvent(new TruckAssignedEvent
+        {
+            ConduceId = Id,
+            TruckId = truckId,
+            AssignedBy = assignedBy
+        });
+    }
+
+    /// <summary>
+    /// Finalizes the conduce after delivery completion.
+    /// </summary>
+    public void Finalize(double actualServiceTime, string? note = null)
+    {
+        ActualServiceTime = actualServiceTime;
+        ExpertDecisionNote = note;
+        Status = ConduceStatus.Completed;
+        LastModifiedAt = DateTimeOffset.UtcNow;
+
+        RaiseDomainEvent(new ConduceFinalizedEvent
+        {
+            ConduceId = Id,
+            ActualServiceTime = actualServiceTime,
+            Note = note
+        });
+    }
+}
+
+/// <summary>
+/// Domain event raised when a new Conduce is created.
+/// </summary>
+public class ConduceCreatedEvent : BaseEvent
+{
+    public required Guid ConduceId { get; init; }
+    public required string ClientName { get; init; }
+    public required string Address { get; init; }
+    public required double Latitude { get; init; }
+    public required double Longitude { get; init; }
+}
+
+/// <summary>
+/// Domain event raised when a Truck is assigned to a Conduce.
+/// </summary>
+public class TruckAssignedEvent : BaseEvent
+{
+    public required Guid ConduceId { get; init; }
+    public required Guid TruckId { get; init; }
+    public string? AssignedBy { get; init; }
+}
+
+/// <summary>
+/// Domain event raised when a Conduce is finalized after delivery.
+/// </summary>
+public class ConduceFinalizedEvent : BaseEvent
+{
+    public required Guid ConduceId { get; init; }
+    public required double ActualServiceTime { get; init; }
+    public string? Note { get; init; }
 }
 
 /// <summary>
