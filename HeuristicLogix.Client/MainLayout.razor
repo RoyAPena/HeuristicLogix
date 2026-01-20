@@ -1,0 +1,17 @@
+﻿@inherits LayoutComponentBase
+@namespace HeuristicLogix.Client
+
+<MudBlazor.MudThemeProvider />
+<MudBlazor.MudDialogProvider />
+<MudBlazor.MudSnackbarProvider />
+
+<MudBlazor.MudLayout>
+    <MudBlazor.MudAppBar Elevation="1">
+        <MudBlazor.MudText Typo="MudBlazor.Typo.h5" Class="ml-3">HeuristicLogix</MudBlazor.MudText>
+    </MudBlazor.MudAppBar>
+    <MudBlazor.MudMainContent>
+        <MudBlazor.MudContainer MaxWidth="MudBlazor.MaxWidth.Large" Class="my-4 pt-4">
+            @Body
+        </MudBlazor.MudContainer>
+    </MudBlazor.MudMainContent>
+</MudBlazor.MudLayout>

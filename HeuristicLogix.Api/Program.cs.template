@@ -1,0 +1,110 @@
+/*
+ * HeuristicLogix.Api Program.cs
+ * 
+ * IMPORTANT: Replace the auto-generated Program.cs in HeuristicLogix.Api
+ * with the content below.
+ * 
+ * This configures:
+ * - String-based enum serialization (ARCHITECTURE.md requirement)
+ * - Entity Framework Core with SQL Server
+ * - Transactional Outbox Service
+ * - Background publisher for Kafka
+ * - CORS for Blazor WebAssembly
+ * - Health checks
+ */
+
+using HeuristicLogix.Api.Services;
+using HeuristicLogix.Shared.Serialization;
+using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+// Configure JSON serialization with string-based enums (ARCHITECTURE.md requirement)
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = HeuristicJsonOptions.Web.PropertyNamingPolicy;
+    options.SerializerOptions.DefaultIgnoreCondition = HeuristicJsonOptions.Web.DefaultIgnoreCondition;
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
+
+// Configure Database
+string? connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException("Database connection string 'DefaultConnection' is not configured.");
+}
+
+builder.Services.AddDbContext<HeuristicLogixDbContext>(options =>
+{
+    options.UseSqlServer(connectionString, sqlOptions =>
+    {
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorNumbersToAdd: null);
+    });
+});
+
+// Register services
+builder.Services.AddSingleton<IOutboxEventNotifier, OutboxEventNotifier>();
+builder.Services.AddScoped<ITransactionalOutboxService, TransactionalOutboxService>();
+
+// Register background services
+builder.Services.AddHostedService<OutboxPublisherBackgroundService>();
+
+
+// Add CORS for Blazor WebAssembly
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("BlazorWasm", policy =>
+    {
+        policy.WithOrigins(
+                builder.Configuration.GetValue<string>("CorsOrigins:BlazorWasm") ?? "http://localhost:5000")
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
+});
+
+// Add health checks
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<HeuristicLogixDbContext>("database");
+
+// Add controllers (for REST API endpoints)
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = HeuristicJsonOptions.Web.PropertyNamingPolicy;
+        options.JsonSerializerOptions.DefaultIgnoreCondition = HeuristicJsonOptions.Web.DefaultIgnoreCondition;
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+
+WebApplication app = builder.Build();
+
+// Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
+
+app.UseHttpsRedirection();
+
+app.UseCors("BlazorWasm");
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+// Map health check endpoint
+app.MapHealthChecks("/health");
+
+// Map a simple info endpoint
+app.MapGet("/api/info", () => new
+{
+    Service = "HeuristicLogix.Api",
+    Version = "1.0.0",
+    Environment = app.Environment.EnvironmentName,
+    Timestamp = DateTimeOffset.UtcNow
+});
+
+app.Run();

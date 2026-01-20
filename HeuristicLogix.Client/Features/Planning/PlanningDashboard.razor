@@ -1,0 +1,336 @@
+﻿@page "/planning"
+@using HeuristicLogix.Shared.Models
+@using HeuristicLogix.Shared.Interfaces
+@using System.Diagnostics
+@inject MudBlazor.ISnackbar Snackbar
+@inject MudBlazor.IDialogService DialogService
+
+<MudBlazor.MudText Typo="MudBlazor.Typo.h4" GutterBottom="true">HeuristicLogix - Planning Dashboard</MudBlazor.MudText>
+
+<MudBlazor.MudDropContainer T="Conduce" Items="_conduces" ItemsSelector="@((Conduce item, string dropzone) => item.Status.ToString() == dropzone || GetTruckIdForConduce(item) == dropzone)" ItemIsDisabled="@((Conduce item) => false)" ItemDropped="ItemUpdated" Class="d-flex flex-wrap flex-grow-1">
+    <ChildContent>
+        <div class="d-flex flex-column mud-background-gray rounded-lg pa-4 mr-6" style="width: 300px; min-height: 80vh;">
+            <MudBlazor.MudText Typo="MudBlazor.Typo.h6" Class="mb-4">Pending Orders</MudBlazor.MudText>
+            <MudBlazor.MudDropZone T="Conduce" Identifier="Pending" Class="flex-grow-1" />
+        </div>
+
+        <div class="d-flex flex-wrap gap-4">
+            @foreach (Truck truck in _trucks)
+            {
+                <div class="d-flex flex-column mud-paper rounded-lg pa-4" style="width: 300px; min-height: 400px; border: 2px solid var(--mud-palette-primary);">
+                    <MudBlazor.MudText Typo="MudBlazor.Typo.h6" Color="MudBlazor.Color.Primary">@truck.PlateNumber (@truck.TruckType)</MudBlazor.MudText>
+                    <MudBlazor.MudText Typo="MudBlazor.Typo.caption">Heuristic Score: @truck.HeuristicCapacityScore</MudBlazor.MudText>
+                    <MudBlazor.MudDivider Class="my-2" />
+                    <MudBlazor.MudDropZone T="Conduce" Identifier="@truck.Id.ToString()" Class="flex-grow-1" />
+                </div>
+            }
+        </div>
+    </ChildContent>
+    <ItemRenderer>
+        <MudBlazor.MudPaper Elevation="2" Class="pa-4 my-2">
+            <MudBlazor.MudText Typo="MudBlazor.Typo.body1">@context.ClientName</MudBlazor.MudText>
+            <MudBlazor.MudText Typo="MudBlazor.Typo.body2" Color="MudBlazor.Color.Secondary">@context.RawAddress</MudBlazor.MudText>
+        </MudBlazor.MudPaper>
+    </ItemRenderer>
+</MudBlazor.MudDropContainer>
+
+@* Manual Override Dialog *@
+<MudBlazor.MudDialog @bind-Visible="_isOverrideDialogVisible">
+    <TitleContent>
+        <MudBlazor.MudText Typo="MudBlazor.Typo.h6">
+            <MudBlazor.MudIcon Icon="@MudBlazor.Icons.Material.Filled.SwapHoriz" Class="mr-2" />
+            Manual Override - Expert Feedback
+        </MudBlazor.MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudBlazor.MudText Typo="MudBlazor.Typo.body2" Class="mb-4">
+            You are reassigning <strong>@_pendingOverride?.Conduce?.ClientName</strong> to a different truck.
+            Please provide feedback to help improve AI suggestions.
+        </MudBlazor.MudText>
+
+        <MudBlazor.MudSelect T="OverrideReasonTag" 
+                             Label="Primary Reason for Override" 
+                             @bind-Value="_selectedPrimaryReason"
+                             Required="true"
+                             RequiredError="Please select a reason"
+                             Class="mb-4">
+            @foreach (OverrideReasonTag reason in Enum.GetValues<OverrideReasonTag>())
+            {
+                <MudBlazor.MudSelectItem T="OverrideReasonTag" Value="@reason">@GetReasonDisplayName(reason)</MudBlazor.MudSelectItem>
+            }
+        </MudBlazor.MudSelect>
+
+        <MudBlazor.MudSelect T="OverrideReasonTag"
+                             Label="Secondary Reasons (Optional)"
+                             MultiSelection="true"
+                             @bind-SelectedValues="_selectedSecondaryReasons"
+                             Class="mb-4">
+            @foreach (OverrideReasonTag reason in Enum.GetValues<OverrideReasonTag>())
+            {
+                @if (reason != _selectedPrimaryReason && reason != OverrideReasonTag.Unspecified)
+                {
+                    <MudBlazor.MudSelectItem T="OverrideReasonTag" Value="@reason">@GetReasonDisplayName(reason)</MudBlazor.MudSelectItem>
+                }
+            }
+        </MudBlazor.MudSelect>
+
+        <MudBlazor.MudTextField T="string"
+                                 Label="Expert Notes (Optional)"
+                                 @bind-Value="_expertNotes"
+                                 Lines="3"
+                                 Placeholder="Explain your reasoning for future AI training..."
+                                 Class="mb-4" />
+
+        <MudBlazor.MudAlert Severity="MudBlazor.Severity.Info" Dense="true" Class="mt-2">
+            <MudBlazor.MudText Typo="MudBlazor.Typo.caption">
+                Decision Time: @FormatDecisionTime() | This feedback will be used to train the heuristic model.
+            </MudBlazor.MudText>
+        </MudBlazor.MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudBlazor.MudButton OnClick="CancelOverride" Color="MudBlazor.Color.Default">Cancel</MudBlazor.MudButton>
+        <MudBlazor.MudButton OnClick="ConfirmOverride" Color="MudBlazor.Color.Primary" Variant="MudBlazor.Variant.Filled">
+            Confirm Assignment
+        </MudBlazor.MudButton>
+    </DialogActions>
+</MudBlazor.MudDialog>
+
+@code {
+    private List<Truck> _trucks = new List<Truck>();
+    private List<Conduce> _conduces = new List<Conduce>();
+    private Dictionary<Guid, Guid> _conduceToTruckAssignments = new Dictionary<Guid, Guid>();
+    private List<ExpertHeuristicFeedback> _feedbackHistory = new List<ExpertHeuristicFeedback>();
+
+    // Override Dialog State
+    private bool _isOverrideDialogVisible = false;
+    private PendingOverrideInfo? _pendingOverride = null;
+    private OverrideReasonTag _selectedPrimaryReason = OverrideReasonTag.Unspecified;
+    private IEnumerable<OverrideReasonTag> _selectedSecondaryReasons = new List<OverrideReasonTag>();
+    private string _expertNotes = string.Empty;
+    private Stopwatch _decisionStopwatch = new Stopwatch();
+
+    protected override void OnInitialized()
+    {
+        // Mock data para probar la UI
+        Truck truck1 = new Truck 
+        { 
+            Id = Guid.NewGuid(), 
+            PlateNumber = "L123456", 
+            TruckType = TruckType.Flatbed, 
+            HeuristicCapacityScore = 85 
+        };
+        Truck truck2 = new Truck 
+        { 
+            Id = Guid.NewGuid(), 
+            PlateNumber = "L789012", 
+            TruckType = TruckType.Dump, 
+            HeuristicCapacityScore = 72 
+        };
+        Truck truck3 = new Truck 
+        { 
+            Id = Guid.NewGuid(), 
+            PlateNumber = "L345678", 
+            TruckType = TruckType.Crane, 
+            HeuristicCapacityScore = 90 
+        };
+
+        _trucks.Add(truck1);
+        _trucks.Add(truck2);
+        _trucks.Add(truck3);
+
+        _conduces.Add(new Conduce 
+        { 
+            Id = Guid.NewGuid(), 
+            ClientName = "Ferretería Central", 
+            RawAddress = "Calle 16 de Agosto, Baní", 
+            Status = ConduceStatus.Pending 
+        });
+        _conduces.Add(new Conduce 
+        { 
+            Id = Guid.NewGuid(), 
+            ClientName = "Constructora Sur", 
+            RawAddress = "Av. Fabio Herrera, Baní", 
+            Status = ConduceStatus.Pending 
+        });
+        _conduces.Add(new Conduce 
+        { 
+            Id = Guid.NewGuid(), 
+            ClientName = "Materiales del Norte", 
+            RawAddress = "Carretera Sánchez, Baní", 
+            Status = ConduceStatus.Pending 
+        });
+    }
+
+    private string GetTruckIdForConduce(Conduce conduce)
+    {
+        if (_conduceToTruckAssignments.TryGetValue(conduce.Id, out Guid truckId))
+        {
+            return truckId.ToString();
+        }
+        return string.Empty;
+    }
+
+    private void ItemUpdated(MudItemDropInfo<Conduce> dropInfo)
+    {
+        if (dropInfo.Item == null)
+        {
+            return;
+        }
+
+        // Check if this is a reassignment (moving from one truck to another or from Pending to truck)
+        bool wasAssignedToTruck = _conduceToTruckAssignments.ContainsKey(dropInfo.Item.Id);
+        bool isMovingToTruck = dropInfo.DropzoneIdentifier != "Pending";
+
+        // If moving to a truck (new assignment or reassignment), show override dialog
+        if (isMovingToTruck)
+        {
+            _pendingOverride = new PendingOverrideInfo
+            {
+                Conduce = dropInfo.Item,
+                OriginalDropZone = wasAssignedToTruck 
+                    ? _conduceToTruckAssignments[dropInfo.Item.Id].ToString() 
+                    : "Pending",
+                NewDropZone = dropInfo.DropzoneIdentifier,
+                WasAlreadyAssigned = wasAssignedToTruck
+            };
+
+            // Start timing the expert's decision
+            _decisionStopwatch.Restart();
+
+            // Reset dialog state
+            _selectedPrimaryReason = OverrideReasonTag.Unspecified;
+            _selectedSecondaryReasons = new List<OverrideReasonTag>();
+            _expertNotes = string.Empty;
+
+            _isOverrideDialogVisible = true;
+        }
+        else
+        {
+            // Moving back to Pending - apply immediately
+            ApplyAssignment(dropInfo.Item, dropInfo.DropzoneIdentifier, null);
+        }
+    }
+
+    private void CancelOverride()
+    {
+        _isOverrideDialogVisible = false;
+        _pendingOverride = null;
+        _decisionStopwatch.Stop();
+        StateHasChanged();
+    }
+
+    private void ConfirmOverride()
+    {
+        if (_pendingOverride == null || _pendingOverride.Conduce == null)
+        {
+            return;
+        }
+
+        _decisionStopwatch.Stop();
+
+        // Create feedback record
+        ExpertHeuristicFeedback feedback = new ExpertHeuristicFeedback
+        {
+            Id = Guid.NewGuid(),
+            ConduceId = _pendingOverride.Conduce.Id,
+            AISuggestedTruckId = _pendingOverride.WasAlreadyAssigned 
+                ? Guid.Parse(_pendingOverride.OriginalDropZone) 
+                : null,
+            ExpertAssignedTruckId = Guid.Parse(_pendingOverride.NewDropZone),
+            PrimaryReasonTag = _selectedPrimaryReason,
+            SecondaryReasonTags = _selectedSecondaryReasons.ToList(),
+            ExpertNotes = string.IsNullOrWhiteSpace(_expertNotes) ? null : _expertNotes,
+            DecisionTimeSeconds = _decisionStopwatch.Elapsed.TotalSeconds,
+            ExpertId = "expert-001", // TODO: Get from authentication
+            ExpertDisplayName = "Logistics Expert",
+            WasDragDropAssignment = true,
+            OriginalDropZone = _pendingOverride.OriginalDropZone,
+            NewDropZone = _pendingOverride.NewDropZone,
+            SessionId = Guid.NewGuid().ToString()
+        };
+
+        _feedbackHistory.Add(feedback);
+
+        // Apply the assignment
+        ApplyAssignment(_pendingOverride.Conduce, _pendingOverride.NewDropZone, feedback);
+
+        // Close dialog
+        _isOverrideDialogVisible = false;
+        _pendingOverride = null;
+
+        Snackbar.Add($"Assignment confirmed with feedback: {GetReasonDisplayName(_selectedPrimaryReason)}", MudBlazor.Severity.Success);
+    }
+
+    private void ApplyAssignment(Conduce conduce, string dropZoneIdentifier, ExpertHeuristicFeedback? feedback)
+    {
+        if (dropZoneIdentifier == "Pending")
+        {
+            conduce.Status = ConduceStatus.Pending;
+            _conduceToTruckAssignments.Remove(conduce.Id);
+            Snackbar.Add($"Order returned to Pending", MudBlazor.Severity.Info);
+        }
+        else
+        {
+            conduce.Status = ConduceStatus.Scheduled;
+            Guid truckId = Guid.Parse(dropZoneIdentifier);
+            _conduceToTruckAssignments[conduce.Id] = truckId;
+
+            Truck? assignedTruck = _trucks.Find(t => t.Id == truckId);
+            if (assignedTruck != null)
+            {
+                assignedTruck.ExpertAssignmentCount++;
+            }
+        }
+
+        // Store expert decision note on the conduce
+        if (feedback != null && !string.IsNullOrWhiteSpace(feedback.ExpertNotes))
+        {
+            conduce.ExpertDecisionNote = feedback.ExpertNotes;
+        }
+
+        StateHasChanged();
+    }
+
+    private string GetReasonDisplayName(OverrideReasonTag reason)
+    {
+        return reason switch
+        {
+            OverrideReasonTag.Unspecified => "No Specific Reason",
+            OverrideReasonTag.WrongTruckType => "Wrong Truck Type",
+            OverrideReasonTag.CapacityOverestimated => "Capacity Overestimated",
+            OverrideReasonTag.CapacityUnderestimated => "Capacity Underestimated",
+            OverrideReasonTag.MaterialIncompatibility => "Material Incompatibility",
+            OverrideReasonTag.BetterRouteAvailable => "Better Route Available",
+            OverrideReasonTag.CustomerPreference => "Customer Preference",
+            OverrideReasonTag.DriverAvailability => "Driver Availability",
+            OverrideReasonTag.TruckMaintenance => "Truck Maintenance",
+            OverrideReasonTag.AccessConstraint => "Access Constraint",
+            OverrideReasonTag.TimeWindowConstraint => "Time Window Constraint",
+            OverrideReasonTag.SpecialHandlingRequired => "Special Handling Required",
+            OverrideReasonTag.WeatherRelated => "Weather Related",
+            OverrideReasonTag.ExpertIntuition => "Expert Intuition",
+            _ => reason.ToString()
+        };
+    }
+
+    private string FormatDecisionTime()
+    {
+        TimeSpan elapsed = _decisionStopwatch.Elapsed;
+        if (elapsed.TotalMinutes >= 1)
+        {
+            return $"{elapsed.Minutes}m {elapsed.Seconds}s";
+        }
+        return $"{elapsed.Seconds}.{elapsed.Milliseconds / 100}s";
+    }
+
+    /// <summary>
+    /// Helper class to track pending override information.
+    /// </summary>
+    private sealed class PendingOverrideInfo
+    {
+        public Conduce? Conduce { get; set; }
+        public string OriginalDropZone { get; set; } = string.Empty;
+        public string NewDropZone { get; set; } = string.Empty;
+        public bool WasAlreadyAssigned { get; set; }
+    }
+}

@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="SpecKit/INFRA_LOCAL.md" />
+    <File Path="SpecKit/LOGISTICS_INTELLIGENCE.md" />
+    <File Path="SpecKit/SPEC_EVENT_SOURCING.md" />
+    <File Path="SpecKit/SPEC_INFRA_2026.md" />
+    <File Path="SpecKit/SPEC_INTELLIGENCE_HYBRID.md" />
+    <File Path="SpecKit\ARCHITECTURE.md" />
+    <File Path="SpecKit\DOMAIN_LOGIC.md" />
+    <File Path="SpecKit\UI_UX_SPEC.md" />
+  </Folder>
+  <Project Path="HeuristicLogix.Client\HeuristicLogix.Client.csproj" />
+  <Project Path="HeuristicLogix.Shared\HeuristicLogix.Shared.csproj" />
+</Solution>
