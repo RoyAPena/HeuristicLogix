@@ -1,0 +1,5 @@
+**/bin
+**/obj
+**/venv
+**/.vscode
+infrastructure/terraform/.terraform
