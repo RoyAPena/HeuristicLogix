@@ -18,6 +18,29 @@ public class Conduce : AggregateRoot
 
     public ConduceStatus Status { get; set; } = ConduceStatus.Pending;
 
+    // --- INVOICE INFORMATION ---
+    /// <summary>
+    /// Invoice/Conduce number (if provided).
+    /// </summary>
+    public string? InvoiceNumber { get; set; }
+
+    /// <summary>
+    /// Scheduled delivery date.
+    /// </summary>
+    public DateTimeOffset? DeliveryDate { get; set; }
+
+    /// <summary>
+    /// Total weight of all items (kg).
+    /// Calculated from ConduceItems.
+    /// </summary>
+    public decimal? TotalWeightKg { get; set; }
+
+    /// <summary>
+    /// Dominant material type for truck selection.
+    /// Determined from ConduceItems.
+    /// </summary>
+    public MaterialType? DominantMaterialType { get; set; }
+
     // --- CAPTURA DE DATOS PARA IA ---
     // Lo que la IA estimó vs lo que el experto (tu padre) decidió
     public double? AIPredictedServiceTime { get; set; }
@@ -27,6 +50,11 @@ public class Conduce : AggregateRoot
     // Navigation properties
     public Guid? AssignedTruckId { get; set; }
     public Guid? RouteId { get; set; }
+
+    /// <summary>
+    /// Collection of line items (materials) in this conduce.
+    /// </summary>
+    public List<ConduceItem> Items { get; set; } = new List<ConduceItem>();
 
     /// <summary>
     /// Creates a new Conduce and raises ConduceCreated event.

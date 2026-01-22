@@ -1,0 +1,78 @@
+@page "/invoice-upload"
+@using HeuristicLogix.Modules.Logistics.DTOs
+@using HeuristicLogix.Modules.Logistics.Services
+@inject IInvoiceExcelService InvoiceExcelService
+@inject ISnackbar Snackbar
+
+<PageTitle>Invoice Excel Upload</PageTitle>
+
+<MudPaper Class="pa-6 mt-4" Elevation="2">
+    <MudText Typo="Typo.h5" GutterBottom="true">Invoice Excel Ingestion</MudText>
+    <MudText Typo="Typo.body2" Class="mb-2">
+        Upload an Excel file with invoices and materials. Review the parsed data before saving.
+    </MudText>
+
+    <MudFileUpload T="IBrowserFile" OnFilesChanged="OnFileSelected" MaximumFileCount="1" Accept=".xlsx">
+        <ButtonTemplate>
+            <MudButton HtmlTag="label" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudUpload" Size="Size.Large">
+                Upload Excel
+            </MudButton>
+        </ButtonTemplate>
+    </MudFileUpload>
+
+    @if (_isLoading)
+    {
+        <MudProgressLinear Indeterminate Color="Color.Primary" Class="my-4" />
+    }
+
+    @if (_summaries?.Count > 0)
+    {
+        <MudDivider Class="my-4" />
+        <MudText Typo="Typo.h6">Review Parsed Invoices</MudText>
+        <InvoiceReviewGrid Summaries="_summaries" OnApprove="OnApproveInvoice" />
+    }
+</MudPaper>
+
+@code {
+    private List<InvoiceLoadSummary>? _summaries;
+    private bool _isLoading = false;
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _isLoading = true;
+        _summaries = null;
+        StateHasChanged();
+
+        try
+        {
+            IBrowserFile file = e.File;
+            using var stream = file.OpenReadStream(10 * 1024 * 1024); // 10MB max
+            _summaries = await InvoiceExcelService.AnalyzeExcelAsync(stream, file.Name);
+            Snackbar.Add($"Parsed {_summaries.Count} invoices from Excel.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error parsing Excel: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnApproveInvoice(string invoiceNumber)
+    {
+        try
+        {
+            await InvoiceExcelService.ApproveAndSaveInvoiceAsync(invoiceNumber, "expert-001");
+            Snackbar.Add($"Invoice {invoiceNumber} saved successfully.", Severity.Success);
+            _summaries = _summaries?.Where(s => s.InvoiceNumber != invoiceNumber).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving invoice: {ex.Message}", Severity.Error);
+        }
+        StateHasChanged();
+    }
+}

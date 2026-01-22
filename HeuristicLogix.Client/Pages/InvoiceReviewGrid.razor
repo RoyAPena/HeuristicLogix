@@ -1,0 +1,71 @@
+@using HeuristicLogix.Modules.Logistics.DTOs
+@using HeuristicLogix.Shared.Models
+
+<MudTable Items="Summaries" Hover="true" Dense="true" Class="mt-2">
+    <HeaderContent>
+        <MudTh>Invoice #</MudTh>
+        <MudTh>Client</MudTh>
+        <MudTh>Address</MudTh>
+        <MudTh>Total Weight (kg)</MudTh>
+        <MudTh>Types</MudTh>
+        <MudTh>Special Handling</MudTh>
+        <MudTh>Compatible Trucks</MudTh>
+        <MudTh>Warnings</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.InvoiceNumber</MudTd>
+        <MudTd>@context.ClientName</MudTd>
+        <MudTd>@context.Address</MudTd>
+        <MudTd>@context.TotalWeightKg.ToString("F0")</MudTd>
+        <MudTd>
+            @foreach (var kvp in context.WeightByType.OrderByDescending(x => x.Value))
+            {
+                <MudChip Color="Color.Primary" Variant="Variant.Filled" Dense="true" Class="mr-1">
+                    @kvp.Value.ToString("F0")kg @kvp.Key
+                </MudChip>
+            }
+        </MudTd>
+        <MudTd>
+            @if (context.RequiresSpecialHandling)
+            {
+                <MudChip Color="Color.Warning" Variant="Variant.Filled" Dense="true">Yes</MudChip>
+                <MudTooltip Text="@string.Join(", ", context.SpecialHandlingItems)">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Warning" />
+                </MudTooltip>
+            }
+            else
+            {
+                <MudChip Color="Color.Success" Variant="Variant.Filled" Dense="true">No</MudChip>
+            }
+        </MudTd>
+        <MudTd>
+            @foreach (var truck in context.CompatibleTruckTypes)
+            {
+                <MudChip Color="Color.Info" Variant="Variant.Outlined" Dense="true" Class="mr-1">@truck</MudChip>
+            }
+        </MudTd>
+        <MudTd>
+            @foreach (var warning in context.Warnings)
+            {
+                <MudChip Color="Color.Warning" Variant="Variant.Outlined" Dense="true" Class="mb-1">@warning</MudChip>
+            }
+        </MudTd>
+        <MudTd>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!context.IsValid" OnClick="@(() => Approve(context.InvoiceNumber))">
+                Approve
+            </MudButton>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    [Parameter] public List<InvoiceLoadSummary> Summaries { get; set; } = new();
+    [Parameter] public EventCallback<string> OnApprove { get; set; }
+
+    private async Task Approve(string invoiceNumber)
+    {
+        if (OnApprove.HasDelegate)
+            await OnApprove.InvokeAsync(invoiceNumber);
+    }
+}
