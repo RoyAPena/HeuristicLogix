@@ -1,0 +1,89 @@
+@page "/invoice-validation"
+@using HeuristicLogix.Shared.DTOs
+@using HeuristicLogix.Client.ViewModels
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+
+<PageTitle>Invoice Geocoding Validation</PageTitle>
+
+<div class="d-flex" style="height: 80vh;">
+    <!-- Left Panel: Invoice List -->
+    <div class="overflow-auto border-end" style="width: 40%;">
+        @foreach (var invoice in ViewModel.Invoices)
+        {
+            <div class="card m-2 shadow-sm @(SelectedInvoice == invoice ? "border-primary" : "")"
+                 @onclick="() => SelectInvoice(invoice)">
+                <div class="card-body">
+                    <h6>Invoice #@invoice.InvoiceNumber</h6>
+                    <div>@invoice.ClientName</div>
+                    <div>
+                        @foreach (var tag in invoice.MaterialTags)
+                        {
+                            <span class="me-1">@GetMaterialIcon(tag)</span>
+                        }
+                    </div>
+                    <span class="badge @GetGeoBadge(invoice.GeocodingStatus)">
+                        @invoice.GeocodingStatus
+                    </span>
+                </div>
+            </div>
+        }
+        <button class="btn btn-success m-3" @onclick="Finalize">Confirm and Save</button>
+    </div>
+
+    <!-- Right Panel: Google Map -->
+    <div style="width: 60%; height: 100%;">
+        <div id="gmap" style="width: 100%; height: 100%;"></div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public InvoiceValidationViewModel ViewModel { get; set; } = new();
+    InvoiceStagingDto? SelectedInvoice;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("initInvoiceMap", ViewModel.Invoices, DotNetObjectReference.Create(this), ViewModel.GoogleMapsFrontendKey);
+        }
+    }
+
+    void SelectInvoice(InvoiceStagingDto invoice)
+    {
+        SelectedInvoice = invoice;
+        JS.InvokeVoidAsync("selectInvoiceOnMap", invoice.InvoiceNumber);
+    }
+
+    async Task Finalize()
+    {
+        // POST ViewModel.Invoices to backend (e.g., via HttpClient)
+        // await Http.PostAsJsonAsync("/api/ingestion/finalize", ViewModel.Invoices);
+    }
+
+    [JSInvokable]
+    public void UpdateInvoiceLocation(string invoiceNumber, double lat, double lng)
+    {
+        var inv = ViewModel.Invoices.FirstOrDefault(i => i.InvoiceNumber == invoiceNumber);
+        if (inv != null)
+        {
+            inv.Latitude = lat;
+            inv.Longitude = lng;
+            StateHasChanged();
+        }
+    }
+
+    string GetMaterialIcon(string tag) => tag switch
+    {
+        "Long" => "<i class='bi bi-arrows-expand text-primary'></i>",
+        "Heavy" => "<i class='bi bi-box-seam text-secondary'></i>",
+        _ => "<i class='bi bi-cube text-muted'></i>"
+    };
+    string GetGeoBadge(GeocodingStatus status) => status switch
+    {
+        GeocodingStatus.Success => "bg-success",
+        GeocodingStatus.Ambiguous => "bg-warning text-dark",
+        GeocodingStatus.Failed => "bg-danger",
+        _ => "bg-secondary"
+    };
+}
