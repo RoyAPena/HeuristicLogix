@@ -2,9 +2,8 @@ using FluentValidation;
 using HeuristicLogix.Modules.Inventory.Services;
 using HeuristicLogix.Modules.Inventory.Validators;
 using HeuristicLogix.Shared.DTOs;
-using Microsoft.EntityFrameworkCore;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace HeuristicLogix.Modules.Inventory;
 
@@ -20,16 +19,9 @@ public static class InventoryModuleExtensions
     /// </summary>
     public static IServiceCollection AddInventoryModule(this IServiceCollection services)
     {
-        // Register backend services (API layer only)
-        services.AddScoped<ICategoryService>(sp => 
-            new CategoryService(
-                sp.GetRequiredService<DbContext>(), 
-                sp.GetRequiredService<ILogger<CategoryService>>()));
-                
-        services.AddScoped<IUnitOfMeasureService>(sp => 
-            new UnitOfMeasureService(
-                sp.GetRequiredService<DbContext>(), 
-                sp.GetRequiredService<ILogger<UnitOfMeasureService>>()));
+        // Register backend services (API layer only) - now using MediatR
+        services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<IUnitOfMeasureService, UnitOfMeasureService>();
 
         // Register validators (used by API for server-side validation)
         services.AddValidatorsFromAssemblyContaining<CategoryValidator>();

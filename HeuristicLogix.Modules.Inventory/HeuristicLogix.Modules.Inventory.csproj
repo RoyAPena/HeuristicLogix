@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MediatR" Version="12.4.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.2" />
@@ -18,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HeuristicLogix.Shared\HeuristicLogix.Shared.csproj" />
+    <ProjectReference Include="..\HeuristicLogix.Features\HeuristicLogix.Features.csproj" />
   </ItemGroup>
 
 </Project>

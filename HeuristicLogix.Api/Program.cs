@@ -1,5 +1,6 @@
 using HeuristicLogix.Api.Persistence;
 using HeuristicLogix.Api.Services;
+using HeuristicLogix.Features.Inventory.Categories;
 using HeuristicLogix.Modules.Inventory;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +26,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // Register AppDbContext as DbContext for modules
 builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<AppDbContext>());
+
+// ============================================================
+// MediatR REGISTRATION (Vertical Slice Architecture)
+// ============================================================
+// Scan the assembly containing the handlers (HeuristicLogix.Features)
+builder.Services.AddMediatR(config =>
+{
+    config.RegisterServicesFromAssemblyContaining<GetCategoriesHandler>();
+});
 
 // Add services
 builder.Services.AddScoped<DataSeederService>();

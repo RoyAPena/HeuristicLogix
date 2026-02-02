@@ -3,11 +3,13 @@
   <ItemGroup>
     <ProjectReference Include="..\HeuristicLogix.Shared\HeuristicLogix.Shared.csproj" />
     <ProjectReference Include="..\HeuristicLogix.Modules.Inventory\HeuristicLogix.Modules.Inventory.csproj" />
+    <ProjectReference Include="..\HeuristicLogix.Features\HeuristicLogix.Features.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Confluent.Kafka" Version="2.13.0" />
     <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
+    <PackageReference Include="MediatR" Version="12.4.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
