@@ -1,87 +1,258 @@
-@page "/inventory/units-of-measure"
+@page "/inventory/units"
 @using HeuristicLogix.Shared.Models
 @using HeuristicLogix.Shared.DTOs
 @using HeuristicLogix.Shared.Services
-@using HeuristicLogix.Modules.Inventory.Services
+@using HeuristicLogix.Client.Features.Inventory.Dialogs
 @using FluentValidation
-@inject IUnitOfMeasureMaintenanceService UnitOfMeasureService
+@using Severity = MudBlazor.Severity
+@inject HttpClient Http
 @inject IValidator<UnitOfMeasureUpsertDto> UnitOfMeasureValidator
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
 <PageTitle>Unidades de Medida - Mantenimiento</PageTitle>
 
-<MaintenanceBase TEntity="UnitOfMeasure"
-                 TDto="UnitOfMeasureUpsertDto"
-                 TId="int"
-                 Service="@_service"
-                 Title="Mantenimiento de Unidades de Medida"
-                 EntityName="Unidad de Medida"
-                 Icon="@Icons.Material.Filled.Straighten"
-                 CreateButtonText="Nueva Unidad"
-                 EmptyMessage="No hay unidades de medida registradas."
-                 GetEditorDto="@GetDto"
-                 SetEditorFromEntity="@SetEditor"
-                 GetEntityId="@(u => u.UnitOfMeasureId)"
-                 GetEntityDisplayName="@(u => u.UnitOfMeasureName)"
-                 Validator="@UnitOfMeasureValidator">
-    
-    <TableHeaders>
-        <MudTh>ID</MudTh>
-        <MudTh>Nombre</MudTh>
-        <MudTh>Símbolo</MudTh>
-    </TableHeaders>
-    
-    <TableColumns Context="unit">
-        <MudTd DataLabel="ID">@unit.UnitOfMeasureId</MudTd>
-        <MudTd DataLabel="Nombre">@unit.UnitOfMeasureName</MudTd>
-        <MudTd DataLabel="Símbolo"><strong>@unit.UnitOfMeasureSymbol</strong></MudTd>
-    </TableColumns>
-    
-    <EditorFields>
-        <MudTextField @bind-Value="_name"
-                      Label="Nombre de Unidad"
-                      Variant="Variant.Outlined"
-                      Required="true"
-                      MaxLength="200"
-                      HelperText="Ej: Kilogramo, Metro, Unidad"
-                      Class="mt-4" />
-        <MudTextField @bind-Value="_symbol"
-                      Label="Símbolo"
-                      Variant="Variant.Outlined"
-                      Required="true"
-                      MaxLength="20"
-                      HelperText="Ej: kg, m, un (letras, números, ³, ²)"
-                      Class="mt-4" />
-    </EditorFields>
-    
-</MaintenanceBase>
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudCard Elevation="0">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">
+                    <MudIcon Icon="@Icons.Material.Filled.Scale" Class="mr-2" />
+                    Mantenimiento de Unidades de Medida
+                </MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" 
+                           Color="Color.Secondary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenCreateDialog">
+                    Nueva Unidad
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (IsLoading)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-4" />
+            }
+            else if (Items == null || !Items.Any())
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-4">
+                    No hay unidades de medida registradas.
+                </MudAlert>
+            }
+            else
+            {
+                <MudTable Items="@Items" 
+                          Hover="true" 
+                          Striped="true"
+                          Dense="true"
+                          FixedHeader="true"
+                          Elevation="0"
+                          Class="mt-4">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Nombre</MudTh>
+                        <MudTh>Símbolo</MudTh>
+                        <MudTh Style="text-align: right">Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="ID" Class="data-id">@context.UnitOfMeasureId</MudTd>
+                        <MudTd DataLabel="Nombre">@context.UnitOfMeasureName</MudTd>
+                        <MudTd DataLabel="Símbolo" Class="data-code"><strong>@context.UnitOfMeasureSymbol</strong></MudTd>
+                        <MudTd DataLabel="Acciones" Style="text-align: right">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           OnClick="@(() => OpenEditDialog(context))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           OnClick="@(() => DeleteItem(context))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
 
 @code {
     private IBaseMaintenanceService<UnitOfMeasure, UnitOfMeasureUpsertDto, int> _service = null!;
-    private string _name = string.Empty;
-    private string _symbol = string.Empty;
-    private int _currentId;
+    private List<UnitOfMeasure> Items { get; set; } = new();
+    private bool IsLoading { get; set; } = true;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        _service = new BaseMaintenanceServiceAdapter<UnitOfMeasure, UnitOfMeasureUpsertDto, int>(UnitOfMeasureService);
+        Console.WriteLine("[UnitOfMeasurePage] Initializing service...");
+        Console.WriteLine($"[UnitOfMeasurePage] HttpClient BaseAddress: {Http.BaseAddress}");
+        _service = new BaseHttpMaintenanceService<UnitOfMeasure, UnitOfMeasureUpsertDto, int>(
+            Http, 
+            "unitsofmeasure", 
+            "UnitOfMeasure");
+        Console.WriteLine("[UnitOfMeasurePage] Service initialized successfully");
+        await LoadItems();
     }
 
-    private Task<UnitOfMeasureUpsertDto> GetDto() => Task.FromResult(
-        new UnitOfMeasureUpsertDto 
-        { 
-            UnitOfMeasureId = _currentId,
-            UnitOfMeasureName = _name,
-            UnitOfMeasureSymbol = _symbol
-        });
-
-    private Task SetEditor(UnitOfMeasure unit)
+    private async Task LoadItems()
     {
-        _currentId = unit.UnitOfMeasureId;
-        _name = unit.UnitOfMeasureName;
-        _symbol = unit.UnitOfMeasureSymbol;
-        return Task.CompletedTask;
+        IsLoading = true;
+        try
+        {
+            Items = (await _service.GetAllAsync()).ToList();
+            Console.WriteLine($"[UnitOfMeasurePage] Loaded {Items.Count} items");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[UnitOfMeasurePage] Error loading items: {ex.Message}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        Console.WriteLine("[UnitOfMeasurePage] OpenCreateDialog called");
+        
+        IDialogReference? dialogRef = null;
+        
+        var parameters = new DialogParameters
+        {
+            ["UnitName"] = string.Empty,
+            ["UnitSymbol"] = string.Empty,
+            ["UnitId"] = 0,
+            ["IsEditing"] = false,
+            ["OnSubmitCallback"] = EventCallback.Factory.Create<UnitOfMeasureUpsertDto?>(this, async (dto) =>
+            {
+                Console.WriteLine($"[UnitOfMeasurePage] OnSubmitCallback called with DTO: {System.Text.Json.JsonSerializer.Serialize(dto)}");
+                if (dto != null)
+                {
+                    await CreateItem(dto);
+                    dialogRef?.Close();
+                }
+            }),
+            ["OnCancelCallback"] = EventCallback.Factory.Create(this, () =>
+            {
+                Console.WriteLine("[UnitOfMeasurePage] OnCancelCallback called");
+                dialogRef?.Close();
+            })
+        };
+
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true,
+            CloseButton = true,
+            CloseOnEscapeKey = true
+        };
+
+        dialogRef = DialogService.Show<UnitOfMeasureDialog>("Nueva Unidad de Medida", parameters, options);
+        await dialogRef.Result;
+    }
+
+    private async Task OpenEditDialog(UnitOfMeasure unit)
+    {
+        Console.WriteLine($"[UnitOfMeasurePage] OpenEditDialog called for ID={unit.UnitOfMeasureId}");
+        
+        IDialogReference? dialogRef = null;
+        
+        var parameters = new DialogParameters
+        {
+            ["UnitName"] = unit.UnitOfMeasureName,
+            ["UnitSymbol"] = unit.UnitOfMeasureSymbol,
+            ["UnitId"] = unit.UnitOfMeasureId,
+            ["IsEditing"] = true,
+            ["OnSubmitCallback"] = EventCallback.Factory.Create<UnitOfMeasureUpsertDto?>(this, async (dto) =>
+            {
+                Console.WriteLine($"[UnitOfMeasurePage] OnSubmitCallback called with DTO: {System.Text.Json.JsonSerializer.Serialize(dto)}");
+                if (dto != null)
+                {
+                    await UpdateItem(unit.UnitOfMeasureId, dto);
+                    dialogRef?.Close();
+                }
+            }),
+            ["OnCancelCallback"] = EventCallback.Factory.Create(this, () =>
+            {
+                Console.WriteLine("[UnitOfMeasurePage] OnCancelCallback called");
+                dialogRef?.Close();
+            })
+        };
+
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true,
+            CloseButton = true,
+            CloseOnEscapeKey = true
+        };
+
+        dialogRef = DialogService.Show<UnitOfMeasureDialog>("Editar Unidad de Medida", parameters, options);
+        await dialogRef.Result;
+    }
+
+    private async Task CreateItem(UnitOfMeasureUpsertDto dto)
+    {
+        try
+        {
+            Console.WriteLine($"[UnitOfMeasurePage] Creating unit: {dto.UnitOfMeasureName}");
+            await _service.CreateAsync(dto);
+            Snackbar.Add("Unidad de medida creada exitosamente", Severity.Success);
+            await LoadItems();
+        }
+        catch (HttpRequestException ex)
+        {
+            Console.WriteLine($"[UnitOfMeasurePage] Create error: {ex.Message}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task UpdateItem(int id, UnitOfMeasureUpsertDto dto)
+    {
+        try
+        {
+            Console.WriteLine($"[UnitOfMeasurePage] Updating unit ID={id}: {dto.UnitOfMeasureName}");
+            await _service.UpdateAsync(id, dto);
+            Snackbar.Add("Unidad de medida actualizada exitosamente", Severity.Success);
+            await LoadItems();
+        }
+        catch (HttpRequestException ex)
+        {
+            Console.WriteLine($"[UnitOfMeasurePage] Update error: {ex.Message}");
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteItem(UnitOfMeasure unit)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirmar Eliminación",
+            $"¿Eliminar '{unit.UnitOfMeasureName}'?",
+            yesText: "Eliminar", 
+            cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            try
+            {
+                Console.WriteLine($"[UnitOfMeasurePage] Deleting unit ID={unit.UnitOfMeasureId}");
+                await _service.DeleteAsync(unit.UnitOfMeasureId);
+                Snackbar.Add("Unidad de medida eliminada exitosamente", Severity.Success);
+                await LoadItems();
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"[UnitOfMeasurePage] Delete error: {ex.Message}");
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
     }
 }
+
+
+
 
 
 

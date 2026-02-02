@@ -1,0 +1,86 @@
+@using HeuristicLogix.Shared.DTOs
+@using MudBlazor
+
+<EditForm Model="@this" OnValidSubmit="Submit">
+    <MudDialog>
+        <DialogContent>
+            <MudTextField @bind-Value="UnitName"
+                          Label="Nombre de Unidad"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Required="true"
+                          MaxLength="200"
+                          HelperText="Ej: Kilogramo, Metro, Unidad"
+                          Class="mt-4"
+                          Immediate="true"
+                          @ref="_nameField" />
+            
+            <MudTextField @bind-Value="UnitSymbol"
+                          Label="Símbolo"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Required="true"
+                          MaxLength="20"
+                          HelperText="Ej: kg, m, un (letras, números, ³, ²)"
+                          Class="mt-4"
+                          Immediate="true" />
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="CancelClick">Cancelar</MudButton>
+            <MudButton ButtonType="ButtonType.Submit" Color="Color.Primary" Variant="Variant.Filled">
+                @(IsEditing ? "Actualizar" : "Crear")
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+</EditForm>
+
+@code {
+    [Parameter] public string UnitName { get; set; } = string.Empty;
+    [Parameter] public string UnitSymbol { get; set; } = string.Empty;
+    [Parameter] public int UnitId { get; set; }
+    [Parameter] public bool IsEditing { get; set; }
+    [Parameter] public EventCallback<UnitOfMeasureUpsertDto?> OnSubmitCallback { get; set; }
+    [Parameter] public EventCallback OnCancelCallback { get; set; }
+
+    private MudTextField<string>? _nameField;
+
+    protected override void OnInitialized()
+    {
+        Console.WriteLine($"[UnitOfMeasureDialog] Initialized - UnitId={UnitId}, UnitName={UnitName}, UnitSymbol={UnitSymbol}");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _nameField != null)
+        {
+            await _nameField.FocusAsync();
+        }
+    }
+
+    async Task CancelClick()
+    {
+        Console.WriteLine("[UnitOfMeasureDialog] Cancel clicked");
+        await OnCancelCallback.InvokeAsync();
+    }
+
+    async Task Submit()
+    {
+        Console.WriteLine($"[UnitOfMeasureDialog] Submit clicked: ID={UnitId}, Name={UnitName}, Symbol={UnitSymbol}");
+        
+        if (string.IsNullOrWhiteSpace(UnitName) || string.IsNullOrWhiteSpace(UnitSymbol))
+        {
+            Console.WriteLine("[UnitOfMeasureDialog] Validation failed: Name or Symbol is empty");
+            return;
+        }
+
+        var dto = new UnitOfMeasureUpsertDto 
+        { 
+            UnitOfMeasureId = UnitId,
+            UnitOfMeasureName = UnitName,
+            UnitOfMeasureSymbol = UnitSymbol
+        };
+        
+        Console.WriteLine($"[UnitOfMeasureDialog] Submitting DTO: {System.Text.Json.JsonSerializer.Serialize(dto)}");
+        await OnSubmitCallback.InvokeAsync(dto);
+    }
+}

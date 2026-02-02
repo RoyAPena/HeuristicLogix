@@ -1,0 +1,16 @@
+@namespace HeuristicLogix.Client.Components
+@inherits MudTextField<T>
+@typeparam T
+
+@*
+    HeuristicLogix HL-UI-001 Standard TextField
+    Automatically applies Variant.Outlined and Margin.Dense
+*@
+
+@code {
+    public HLTextField()
+    {
+        Variant = Variant.Outlined;
+        Margin = Margin.Dense;
+    }
+}

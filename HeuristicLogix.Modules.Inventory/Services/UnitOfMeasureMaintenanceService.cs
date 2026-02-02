@@ -16,34 +16,48 @@ public class UnitOfMeasureMaintenanceService(HttpClient http) : IUnitOfMeasureMa
 
     public async Task<IEnumerable<UnitOfMeasure>> GetAllAsync()
     {
-        return await _http.GetFromJsonAsync<IEnumerable<UnitOfMeasure>>(BaseEndpoint) 
+        var url = BaseEndpoint;
+        Console.WriteLine($"[UnitOfMeasureMaintenanceService] GET {url}");
+        return await _http.GetFromJsonAsync<IEnumerable<UnitOfMeasure>>(url) 
             ?? Array.Empty<UnitOfMeasure>();
     }
 
     public async Task<UnitOfMeasure?> GetByIdAsync(int id)
     {
-        return await _http.GetFromJsonAsync<UnitOfMeasure>($"{BaseEndpoint}/{id}");
+        var url = $"{BaseEndpoint}/{id}";
+        Console.WriteLine($"[UnitOfMeasureMaintenanceService] GET {url}");
+        return await _http.GetFromJsonAsync<UnitOfMeasure>(url);
     }
 
     public async Task<UnitOfMeasure> CreateAsync(UnitOfMeasureUpsertDto dto)
     {
-        var response = await _http.PostAsJsonAsync(BaseEndpoint, dto);
+        var url = BaseEndpoint;
+        Console.WriteLine($"[UnitOfMeasureMaintenanceService] POST {url}");
+        Console.WriteLine($"[UnitOfMeasureMaintenanceService] DTO: UnitOfMeasureId={dto.UnitOfMeasureId}, Name={dto.UnitOfMeasureName}, Symbol={dto.UnitOfMeasureSymbol}");
+        var response = await _http.PostAsJsonAsync(url, dto);
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<UnitOfMeasure>())!;
     }
 
     public async Task<UnitOfMeasure> UpdateAsync(int id, UnitOfMeasureUpsertDto dto)
     {
-        var response = await _http.PutAsJsonAsync($"{BaseEndpoint}/{id}", dto);
+        var url = $"{BaseEndpoint}/{id}";
+        Console.WriteLine($"[UnitOfMeasureMaintenanceService] PUT {url}");
+        Console.WriteLine($"[UnitOfMeasureMaintenanceService] ID param: {id}");
+        Console.WriteLine($"[UnitOfMeasureMaintenanceService] DTO: UnitOfMeasureId={dto.UnitOfMeasureId}, Name={dto.UnitOfMeasureName}, Symbol={dto.UnitOfMeasureSymbol}");
+        var response = await _http.PutAsJsonAsync(url, dto);
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<UnitOfMeasure>())!;
     }
 
     public async Task<bool> DeleteAsync(int id)
     {
-        var response = await _http.DeleteAsync($"{BaseEndpoint}/{id}");
+        var url = $"{BaseEndpoint}/{id}";
+        Console.WriteLine($"[UnitOfMeasureMaintenanceService] DELETE {url}");
+        var response = await _http.DeleteAsync(url);
         return response.IsSuccessStatusCode;
     }
 }
+
 
 

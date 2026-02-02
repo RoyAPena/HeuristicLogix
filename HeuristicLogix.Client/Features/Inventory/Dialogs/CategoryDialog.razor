@@ -1,0 +1,74 @@
+@using HeuristicLogix.Shared.DTOs
+@using MudBlazor
+
+<EditForm Model="@this" OnValidSubmit="Submit">
+    <MudDialog>
+        <DialogContent>
+            <MudTextField @bind-Value="CategoryName"
+                          Label="Nombre de Categoría"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Required="true"
+                          MaxLength="300"
+                          HelperText="Ingrese el nombre de la categoría"
+                          Class="mt-4"
+                          Immediate="true"
+                          @ref="_nameField" />
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="CancelClick">Cancelar</MudButton>
+            <MudButton ButtonType="ButtonType.Submit" Color="Color.Primary" Variant="Variant.Filled">
+                @(IsEditing ? "Actualizar" : "Crear")
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+</EditForm>
+
+@code {
+    [Parameter] public string CategoryName { get; set; } = string.Empty;
+    [Parameter] public int CategoryId { get; set; }
+    [Parameter] public bool IsEditing { get; set; }
+    [Parameter] public EventCallback<CategoryUpsertDto?> OnSubmitCallback { get; set; }
+    [Parameter] public EventCallback OnCancelCallback { get; set; }
+
+    private MudTextField<string>? _nameField;
+
+    protected override void OnInitialized()
+    {
+        Console.WriteLine($"[CategoryDialog] Initialized - CategoryId={CategoryId}, CategoryName={CategoryName}");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _nameField != null)
+        {
+            await _nameField.FocusAsync();
+        }
+    }
+
+    async Task CancelClick()
+    {
+        Console.WriteLine("[CategoryDialog] Cancel clicked");
+        await OnCancelCallback.InvokeAsync();
+    }
+
+    async Task Submit()
+    {
+        Console.WriteLine($"[CategoryDialog] Submit clicked: ID={CategoryId}, Name={CategoryName}");
+        
+        if (string.IsNullOrWhiteSpace(CategoryName))
+        {
+            Console.WriteLine("[CategoryDialog] Validation failed: Name is empty");
+            return;
+        }
+
+        var dto = new CategoryUpsertDto 
+        { 
+            CategoryId = CategoryId, 
+            CategoryName = CategoryName 
+        };
+        
+        Console.WriteLine($"[CategoryDialog] Submitting DTO: {System.Text.Json.JsonSerializer.Serialize(dto)}");
+        await OnSubmitCallback.InvokeAsync(dto);
+    }
+}

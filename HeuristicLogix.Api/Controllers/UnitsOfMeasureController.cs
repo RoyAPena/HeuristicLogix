@@ -1,5 +1,6 @@
 using FluentValidation;
 using HeuristicLogix.Modules.Inventory.Services;
+using HeuristicLogix.Shared.DTOs;
 using HeuristicLogix.Shared.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,12 +15,12 @@ namespace HeuristicLogix.Api.Controllers;
 public class UnitsOfMeasureController : ControllerBase
 {
     private readonly IUnitOfMeasureService _unitService;
-    private readonly IValidator<UnitOfMeasure> _validator;
+    private readonly IValidator<UnitOfMeasureUpsertDto> _validator;
     private readonly ILogger<UnitsOfMeasureController> _logger;
 
     public UnitsOfMeasureController(
         IUnitOfMeasureService unitService,
-        IValidator<UnitOfMeasure> validator,
+        IValidator<UnitOfMeasureUpsertDto> validator,
         ILogger<UnitsOfMeasureController> logger)
     {
         _unitService = unitService;
@@ -62,10 +63,10 @@ public class UnitsOfMeasureController : ControllerBase
     [HttpPost]
     [ProducesResponseType(typeof(UnitOfMeasure), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create([FromBody] UnitOfMeasure unit)
+    public async Task<IActionResult> Create([FromBody] UnitOfMeasureUpsertDto dto)
     {
         // Validate
-        var validationResult = await _validator.ValidateAsync(unit);
+        var validationResult = await _validator.ValidateAsync(dto);
         if (!validationResult.IsValid)
         {
             return BadRequest(validationResult.ToDictionary());
@@ -73,6 +74,13 @@ public class UnitsOfMeasureController : ControllerBase
 
         try
         {
+            // Map DTO to Entity
+            var unit = new UnitOfMeasure
+            {
+                UnitOfMeasureName = dto.UnitOfMeasureName,
+                UnitOfMeasureSymbol = dto.UnitOfMeasureSymbol
+            };
+
             var created = await _unitService.CreateAsync(unit);
             return CreatedAtAction(nameof(GetById), new { id = created.UnitOfMeasureId }, created);
         }
@@ -90,9 +98,9 @@ public class UnitsOfMeasureController : ControllerBase
     [ProducesResponseType(typeof(UnitOfMeasure), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Update(int id, [FromBody] UnitOfMeasure unit)
+    public async Task<IActionResult> Update(int id, [FromBody] UnitOfMeasureUpsertDto dto)
     {
-        if (id != unit.UnitOfMeasureId)
+        if (id != dto.UnitOfMeasureId)
         {
             return BadRequest(new { message = "ID mismatch between URL and body" });
         }
@@ -103,7 +111,7 @@ public class UnitsOfMeasureController : ControllerBase
         }
 
         // Validate
-        var validationResult = await _validator.ValidateAsync(unit);
+        var validationResult = await _validator.ValidateAsync(dto);
         if (!validationResult.IsValid)
         {
             return BadRequest(validationResult.ToDictionary());
@@ -111,6 +119,14 @@ public class UnitsOfMeasureController : ControllerBase
 
         try
         {
+            // Map DTO to Entity
+            var unit = new UnitOfMeasure
+            {
+                UnitOfMeasureId = dto.UnitOfMeasureId,
+                UnitOfMeasureName = dto.UnitOfMeasureName,
+                UnitOfMeasureSymbol = dto.UnitOfMeasureSymbol
+            };
+
             var updated = await _unitService.UpdateAsync(unit);
             return Ok(updated);
         }
@@ -148,3 +164,4 @@ public class UnitsOfMeasureController : ControllerBase
         }
     }
 }
+

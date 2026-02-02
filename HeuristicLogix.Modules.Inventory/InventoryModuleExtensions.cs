@@ -15,11 +15,12 @@ namespace HeuristicLogix.Modules.Inventory;
 public static class InventoryModuleExtensions
 {
     /// <summary>
-    /// Registers all Inventory Module services, validators, and maintenance services.
+    /// Registers Inventory Module services for the API/Backend.
+    /// Use AddInventoryModuleClient() for Blazor WebAssembly client services.
     /// </summary>
     public static IServiceCollection AddInventoryModule(this IServiceCollection services)
     {
-        // Register backend services (API layer)
+        // Register backend services (API layer only)
         services.AddScoped<ICategoryService>(sp => 
             new CategoryService(
                 sp.GetRequiredService<DbContext>(), 
@@ -30,12 +31,25 @@ public static class InventoryModuleExtensions
                 sp.GetRequiredService<DbContext>(), 
                 sp.GetRequiredService<ILogger<UnitOfMeasureService>>()));
 
-        // Register frontend maintenance services (Client layer)
+        // Register validators (used by API for server-side validation)
+        services.AddValidatorsFromAssemblyContaining<CategoryValidator>();
+        services.AddScoped<IValidator<CategoryUpsertDto>, CategoryUpsertDtoValidator>();
+        services.AddScoped<IValidator<UnitOfMeasureUpsertDto>, UnitOfMeasureUpsertDtoValidator>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers Inventory Module services for the Blazor WebAssembly Client.
+    /// This includes HttpClient-based maintenance services.
+    /// </summary>
+    public static IServiceCollection AddInventoryModuleClient(this IServiceCollection services, string baseApiUrl)
+    {
+        // Register frontend maintenance services (Client layer - requires HttpClient)
         services.AddScoped<ICategoryMaintenanceService, CategoryMaintenanceService>();
         services.AddScoped<IUnitOfMeasureMaintenanceService, UnitOfMeasureMaintenanceService>();
 
-        // Register validators (used by both API and Client)
-        services.AddValidatorsFromAssemblyContaining<CategoryValidator>();
+        // Register client-side validators (optional, for client-side validation)
         services.AddScoped<IValidator<CategoryUpsertDto>, CategoryUpsertDtoValidator>();
         services.AddScoped<IValidator<UnitOfMeasureUpsertDto>, UnitOfMeasureUpsertDtoValidator>();
 

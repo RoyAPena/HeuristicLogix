@@ -1,17 +1,66 @@
 ﻿@inherits LayoutComponentBase
 @namespace HeuristicLogix.Client
+@using HeuristicLogix.Client.Theme
+@using MudBlazor
 
-<MudBlazor.MudThemeProvider />
-<MudBlazor.MudDialogProvider />
-<MudBlazor.MudSnackbarProvider />
+<MudThemeProvider Theme="@HeuristicLogixTheme.Theme" />
 
-<MudBlazor.MudLayout>
-    <MudBlazor.MudAppBar Elevation="1">
-        <MudBlazor.MudText Typo="MudBlazor.Typo.h5" Class="ml-3">HeuristicLogix</MudBlazor.MudText>
-    </MudBlazor.MudAppBar>
-    <MudBlazor.MudMainContent>
-        <MudBlazor.MudContainer MaxWidth="MudBlazor.MaxWidth.Large" Class="my-4 pt-4">
+<MudLayout>
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    
+    <MudAppBar Elevation="1" Fixed="true">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" 
+                       Color="Color.Inherit" 
+                       Edge="Edge.Start" 
+                       OnClick="@ToggleDrawer" />
+        <MudText Typo="Typo.h5" Class="ml-3">HeuristicLogix</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications" 
+                       Color="Color.Inherit" />
+        <MudIconButton Icon="@Icons.Material.Filled.AccountCircle" 
+                       Color="Color.Inherit" />
+    </MudAppBar>
+    
+    <MudDrawer @bind-Open="@_drawerOpen" 
+               ClipMode="DrawerClipMode.Always" 
+               Elevation="1"
+               Variant="@DrawerVariant.Persistent">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6" Color="Color.Primary">
+                <MudIcon Icon="@Icons.Material.Filled.BusinessCenter" Class="mr-2" />
+                Módulos ERP
+            </MudText>
+        </MudDrawerHeader>
+        <MudNavMenu>
+            <MudNavGroup Title="Inventario" 
+                         Icon="@Icons.Material.Filled.Inventory" 
+                         Expanded="true">
+                <MudNavLink Href="/inventory/categories" 
+                            Icon="@Icons.Material.Filled.Category">
+                    Categorías
+                </MudNavLink>
+                <MudNavLink Href="/inventory/units" 
+                            Icon="@Icons.Material.Filled.Scale">
+                    Unidades de Medida
+                </MudNavLink>
+            </MudNavGroup>
+        </MudNavMenu>
+    </MudDrawer>
+    
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4 pt-4">
             @Body
-        </MudBlazor.MudContainer>
-    </MudBlazor.MudMainContent>
-</MudBlazor.MudLayout>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+}
+

@@ -9,7 +9,7 @@
 @inject IDialogService DialogService
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    <MudCard>
+    <MudCard Elevation="0">
         <MudCardHeader>
             <CardHeaderContent>
                 <MudText Typo="Typo.h6">
@@ -19,7 +19,7 @@
             </CardHeaderContent>
             <CardHeaderActions>
                 <MudButton Variant="Variant.Filled" 
-                           Color="Color.Primary"
+                           Color="Color.Secondary"
                            StartIcon="@Icons.Material.Filled.Add"
                            OnClick="OpenCreateDialog">
                     @CreateButtonText
@@ -43,6 +43,8 @@
                           Hover="true" 
                           Striped="true"
                           Dense="true"
+                          FixedHeader="true"
+                          Elevation="0"
                           Class="mt-4">
                     <HeaderContent>
                         @TableHeaders
@@ -67,7 +69,7 @@
     </MudCard>
 </MudContainer>
 
-<MudDialog @bind-IsVisible="DialogVisible" Options="DialogOptions">
+<MudDialog @bind-IsVisible="@DialogVisible" Options="DialogOptions">
     <TitleContent>
         <MudText Typo="Typo.h6">
             @(IsEditing ? "Editar" : "Nuevo") @EntityName
@@ -92,38 +94,39 @@
 </MudDialog>
 
 @code {
-    [Parameter] public required IBaseMaintenanceService<TEntity, TDto, TId> Service { get; set; }
-    [Parameter] public required string Title { get; set; }
-    [Parameter] public required string EntityName { get; set; }
-    [Parameter] public required string Icon { get; set; }
-    [Parameter] public required string CreateButtonText { get; set; }
-    [Parameter] public required string EmptyMessage { get; set; }
-    [Parameter] public required RenderFragment TableHeaders { get; set; }
-    [Parameter] public required RenderFragment<TEntity> TableColumns { get; set; }
-    [Parameter] public required RenderFragment EditorFields { get; set; }
-    [Parameter] public required Func<Task<TDto>> GetEditorDto { get; set; }
-    [Parameter] public required Func<TEntity, Task> SetEditorFromEntity { get; set; }
-    [Parameter] public required Func<TEntity, TId> GetEntityId { get; set; }
-    [Parameter] public required Func<TEntity, string> GetEntityDisplayName { get; set; }
-    [Parameter] public IValidator<TDto>? Validator { get; set; }
+[Parameter] public required IBaseMaintenanceService<TEntity, TDto, TId> Service { get; set; }
+[Parameter] public required string Title { get; set; }
+[Parameter] public required string EntityName { get; set; }
+[Parameter] public required string Icon { get; set; }
+[Parameter] public required string CreateButtonText { get; set; }
+[Parameter] public required string EmptyMessage { get; set; }
+[Parameter] public required RenderFragment TableHeaders { get; set; }
+[Parameter] public required RenderFragment<TEntity> TableColumns { get; set; }
+[Parameter] public required RenderFragment EditorFields { get; set; }
+[Parameter] public required Func<Task<TDto>> GetEditorDto { get; set; }
+[Parameter] public required Func<TEntity, Task> SetEditorFromEntity { get; set; }
+[Parameter] public required Func<TEntity, TId> GetEntityId { get; set; }
+[Parameter] public required Func<TEntity, string> GetEntityDisplayName { get; set; }
+[Parameter] public IValidator<TDto>? Validator { get; set; }
+[Parameter] public Action? OnDialogOpening { get; set; }
 
-    protected List<TEntity> Items { get; set; } = new();
-    protected bool IsLoading { get; set; } = true;
-    protected bool DialogVisible { get; set; }
-    protected bool IsEditing { get; set; }
-    protected bool IsSaving { get; set; }
-    protected TEntity? CurrentEntity { get; set; }
+protected List<TEntity> Items { get; set; } = new();
+protected bool IsLoading { get; set; } = true;
+protected bool DialogVisible { get; set; }
+protected bool IsEditing { get; set; }
+protected bool IsSaving { get; set; }
+protected TEntity? CurrentEntity { get; set; }
 
-    private DialogOptions DialogOptions { get; } = new() 
-    { 
-        MaxWidth = MaxWidth.Small, 
-        FullWidth = true
-    };
+private DialogOptions DialogOptions { get; } = new() 
+{ 
+    MaxWidth = MaxWidth.Small, 
+    FullWidth = true
+};
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadItems();
-    }
+protected override async Task OnInitializedAsync()
+{
+    await LoadItems();
+}
 
     private async Task LoadItems()
     {
@@ -144,17 +147,30 @@
 
     protected void OpenCreateDialog()
     {
+        Console.WriteLine($"[MaintenanceBase-{EntityName}] OpenCreateDialog called");
         CurrentEntity = null;
         IsEditing = false;
+        OnDialogOpening?.Invoke();
+        Console.WriteLine($"[MaintenanceBase-{EntityName}] Setting DialogVisible = true");
         DialogVisible = true;
+        
+        // Force UI update on correct thread
+        InvokeAsync(StateHasChanged);
+        Console.WriteLine($"[MaintenanceBase-{EntityName}] Dialog should now be visible");
     }
 
     protected async Task OpenEditDialog(TEntity entity)
     {
+        Console.WriteLine($"[MaintenanceBase-{EntityName}] OpenEditDialog called");
         CurrentEntity = entity;
         await SetEditorFromEntity(entity);
         IsEditing = true;
+        Console.WriteLine($"[MaintenanceBase-{EntityName}] Setting DialogVisible = true");
         DialogVisible = true;
+        
+        // Force UI update on correct thread
+        await InvokeAsync(StateHasChanged);
+        Console.WriteLine($"[MaintenanceBase-{EntityName}] Dialog should now be visible");
     }
 
     protected void CloseDialog()
@@ -231,6 +247,14 @@
                     Snackbar.Add($"{EntityName} eliminado exitosamente", Severity.Success);
                     await LoadItems();
                 }
+                else
+                {
+                    Snackbar.Add($"No se pudo eliminar {EntityName}", Severity.Warning);
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                await HandleHttpError(ex);
             }
             catch (Exception ex)
             {
@@ -249,9 +273,61 @@
 
     private async Task HandleHttpError(HttpRequestException ex)
     {
-        // Try to parse HTTP status code from response
-        var statusCode = ex.StatusCode;
+        Console.WriteLine($"[MaintenanceBase-{EntityName}] HandleHttpError: {ex.Message}");
+        Console.WriteLine($"[MaintenanceBase-{EntityName}] StatusCode: {ex.StatusCode}");
         
+        var statusCode = ex.StatusCode;
+        string? specificMessage = null;
+        
+        // Try to extract JSON message from exception message
+        try
+        {
+            // Look for JSON in the error message (format: "DELETE failed with status 400: {json}")
+            var message = ex.Message;
+            var jsonStart = message.IndexOf('{');
+            var jsonEnd = message.LastIndexOf('}');
+            
+            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            {
+                var jsonString = message.Substring(jsonStart, jsonEnd - jsonStart + 1);
+                Console.WriteLine($"[MaintenanceBase-{EntityName}] Extracted JSON: {jsonString}");
+                
+                // Parse JSON to extract "message" field
+                using var doc = System.Text.Json.JsonDocument.Parse(jsonString);
+                if (doc.RootElement.TryGetProperty("message", out var messageProperty))
+                {
+                    specificMessage = messageProperty.GetString();
+                    Console.WriteLine($"[MaintenanceBase-{EntityName}] Extracted message: {specificMessage}");
+                }
+            }
+        }
+        catch (Exception parseEx)
+        {
+            Console.WriteLine($"[MaintenanceBase-{EntityName}] Error parsing JSON: {parseEx.Message}");
+        }
+        
+        // If we have a specific message, use it
+        if (!string.IsNullOrWhiteSpace(specificMessage))
+        {
+            // Handle foreign key constraint violations specially
+            if (specificMessage.Contains("foreign key", StringComparison.OrdinalIgnoreCase) ||
+                specificMessage.Contains("constraint", StringComparison.OrdinalIgnoreCase) ||
+                specificMessage.Contains("en uso", StringComparison.OrdinalIgnoreCase))
+            {
+                Snackbar.Add($"?? {specificMessage}", Severity.Warning);
+            }
+            else if (statusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                Snackbar.Add($"Error de validación: {specificMessage}", Severity.Warning);
+            }
+            else
+            {
+                Snackbar.Add(specificMessage, Severity.Error);
+            }
+            return;
+        }
+        
+        // Fallback to status code handling if no specific message
         if (statusCode.HasValue)
         {
             switch ((int)statusCode.Value)

@@ -16,34 +16,48 @@ public class CategoryMaintenanceService(HttpClient http) : ICategoryMaintenanceS
 
     public async Task<IEnumerable<Category>> GetAllAsync()
     {
-        return await _http.GetFromJsonAsync<IEnumerable<Category>>(BaseEndpoint) 
+        var url = BaseEndpoint;
+        Console.WriteLine($"[CategoryMaintenanceService] GET {url}");
+        return await _http.GetFromJsonAsync<IEnumerable<Category>>(url) 
             ?? Array.Empty<Category>();
     }
 
     public async Task<Category?> GetByIdAsync(int id)
     {
-        return await _http.GetFromJsonAsync<Category>($"{BaseEndpoint}/{id}");
+        var url = $"{BaseEndpoint}/{id}";
+        Console.WriteLine($"[CategoryMaintenanceService] GET {url}");
+        return await _http.GetFromJsonAsync<Category>(url);
     }
 
     public async Task<Category> CreateAsync(CategoryUpsertDto dto)
     {
-        var response = await _http.PostAsJsonAsync(BaseEndpoint, dto);
+        var url = BaseEndpoint;
+        Console.WriteLine($"[CategoryMaintenanceService] POST {url}");
+        Console.WriteLine($"[CategoryMaintenanceService] DTO: CategoryId={dto.CategoryId}, CategoryName={dto.CategoryName}");
+        var response = await _http.PostAsJsonAsync(url, dto);
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<Category>())!;
     }
 
     public async Task<Category> UpdateAsync(int id, CategoryUpsertDto dto)
     {
-        var response = await _http.PutAsJsonAsync($"{BaseEndpoint}/{id}", dto);
+        var url = $"{BaseEndpoint}/{id}";
+        Console.WriteLine($"[CategoryMaintenanceService] PUT {url}");
+        Console.WriteLine($"[CategoryMaintenanceService] ID param: {id}");
+        Console.WriteLine($"[CategoryMaintenanceService] DTO: CategoryId={dto.CategoryId}, CategoryName={dto.CategoryName}");
+        var response = await _http.PutAsJsonAsync(url, dto);
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<Category>())!;
     }
 
     public async Task<bool> DeleteAsync(int id)
     {
-        var response = await _http.DeleteAsync($"{BaseEndpoint}/{id}");
+        var url = $"{BaseEndpoint}/{id}";
+        Console.WriteLine($"[CategoryMaintenanceService] DELETE {url}");
+        var response = await _http.DeleteAsync(url);
         return response.IsSuccessStatusCode;
     }
 }
+
 
 

@@ -1,5 +1,6 @@
 using FluentValidation;
 using HeuristicLogix.Modules.Inventory.Services;
+using HeuristicLogix.Shared.DTOs;
 using HeuristicLogix.Shared.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,12 +15,12 @@ namespace HeuristicLogix.Api.Controllers;
 public class CategoriesController : ControllerBase
 {
     private readonly ICategoryService _categoryService;
-    private readonly IValidator<Category> _validator;
+    private readonly IValidator<CategoryUpsertDto> _validator;
     private readonly ILogger<CategoriesController> _logger;
 
     public CategoriesController(
         ICategoryService categoryService,
-        IValidator<Category> validator,
+        IValidator<CategoryUpsertDto> validator,
         ILogger<CategoriesController> logger)
     {
         _categoryService = categoryService;
@@ -62,10 +63,10 @@ public class CategoriesController : ControllerBase
     [HttpPost]
     [ProducesResponseType(typeof(Category), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create([FromBody] Category category)
+    public async Task<IActionResult> Create([FromBody] CategoryUpsertDto dto)
     {
         // Validate
-        var validationResult = await _validator.ValidateAsync(category);
+        var validationResult = await _validator.ValidateAsync(dto);
         if (!validationResult.IsValid)
         {
             return BadRequest(validationResult.ToDictionary());
@@ -73,6 +74,12 @@ public class CategoriesController : ControllerBase
 
         try
         {
+            // Map DTO to Entity
+            var category = new Category
+            {
+                CategoryName = dto.CategoryName
+            };
+
             var created = await _categoryService.CreateAsync(category);
             return CreatedAtAction(nameof(GetById), new { id = created.CategoryId }, created);
         }
@@ -90,9 +97,9 @@ public class CategoriesController : ControllerBase
     [ProducesResponseType(typeof(Category), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Update(int id, [FromBody] Category category)
+    public async Task<IActionResult> Update(int id, [FromBody] CategoryUpsertDto dto)
     {
-        if (id != category.CategoryId)
+        if (id != dto.CategoryId)
         {
             return BadRequest(new { message = "ID mismatch between URL and body" });
         }
@@ -103,7 +110,7 @@ public class CategoriesController : ControllerBase
         }
 
         // Validate
-        var validationResult = await _validator.ValidateAsync(category);
+        var validationResult = await _validator.ValidateAsync(dto);
         if (!validationResult.IsValid)
         {
             return BadRequest(validationResult.ToDictionary());
@@ -111,6 +118,13 @@ public class CategoriesController : ControllerBase
 
         try
         {
+            // Map DTO to Entity
+            var category = new Category
+            {
+                CategoryId = dto.CategoryId,
+                CategoryName = dto.CategoryName
+            };
+
             var updated = await _categoryService.UpdateAsync(category);
             return Ok(updated);
         }
@@ -148,3 +162,4 @@ public class CategoriesController : ControllerBase
         }
     }
 }
+

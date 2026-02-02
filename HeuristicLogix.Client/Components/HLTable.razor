@@ -1,0 +1,46 @@
+@namespace HeuristicLogix.Client.Components
+@typeparam T
+
+@*
+    HeuristicLogix HL-UI-001 Standard Table
+    Automatically applies Dense, Hover, Striped, and FixedHeader
+    
+    Note: This is a wrapper component. Use standard MudTable syntax inside parent components.
+    Typography styles are applied via global CSS.
+*@
+
+<MudTable Items="@Items"
+          Dense="true"
+          Hover="true"
+          Striped="true"
+          FixedHeader="@FixedHeader"
+          Elevation="0"
+          Class="hl-table"
+          Loading="@Loading"
+          LoadingProgressColor="@Color.Primary">
+    <HeaderContent>
+        @HeaderContent
+    </HeaderContent>
+    <RowTemplate>
+        @RowTemplate(context)
+    </RowTemplate>
+</MudTable>
+
+@code {
+    [Parameter]
+    public IEnumerable<T>? Items { get; set; }
+
+    [Parameter]
+    public RenderFragment? HeaderContent { get; set; }
+
+    [Parameter]
+    public RenderFragment<T>? RowTemplate { get; set; }
+
+    [Parameter]
+    public bool Loading { get; set; }
+    
+    [Parameter]
+    public bool FixedHeader { get; set; } = true;
+}
+
+
