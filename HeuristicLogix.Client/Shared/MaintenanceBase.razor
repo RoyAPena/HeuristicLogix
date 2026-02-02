@@ -1,0 +1,303 @@
+@typeparam TEntity where TEntity : class
+@typeparam TDto where TDto : class
+@typeparam TId where TId : struct
+@using HeuristicLogix.Shared.Services
+@using FluentValidation
+@using FluentValidation.Results
+@using Severity = MudBlazor.Severity
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">
+                    <MudIcon Icon="@Icon" Class="mr-2" />
+                    @Title
+                </MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" 
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenCreateDialog">
+                    @CreateButtonText
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (IsLoading)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-4" />
+            }
+            else if (Items == null || !Items.Any())
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-4">
+                    @EmptyMessage
+                </MudAlert>
+            }
+            else
+            {
+                <MudTable Items="@Items" 
+                          Hover="true" 
+                          Striped="true"
+                          Dense="true"
+                          Class="mt-4">
+                    <HeaderContent>
+                        @TableHeaders
+                        <MudTh Style="text-align: right">Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        @TableColumns(context)
+                        <MudTd DataLabel="Acciones" Style="text-align: right">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           OnClick="@(() => OpenEditDialog(context))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           OnClick="@(() => DeleteItem(context))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+<MudDialog @bind-IsVisible="DialogVisible" Options="DialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @(IsEditing ? "Editar" : "Nuevo") @EntityName
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @EditorFields
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CloseDialog">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" 
+                   Variant="Variant.Filled"
+                   OnClick="SaveItem"
+                   Disabled="IsSaving">
+            @if (IsSaving)
+            {
+                <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+            }
+            @(IsEditing ? "Actualizar" : "Crear")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] public required IBaseMaintenanceService<TEntity, TDto, TId> Service { get; set; }
+    [Parameter] public required string Title { get; set; }
+    [Parameter] public required string EntityName { get; set; }
+    [Parameter] public required string Icon { get; set; }
+    [Parameter] public required string CreateButtonText { get; set; }
+    [Parameter] public required string EmptyMessage { get; set; }
+    [Parameter] public required RenderFragment TableHeaders { get; set; }
+    [Parameter] public required RenderFragment<TEntity> TableColumns { get; set; }
+    [Parameter] public required RenderFragment EditorFields { get; set; }
+    [Parameter] public required Func<Task<TDto>> GetEditorDto { get; set; }
+    [Parameter] public required Func<TEntity, Task> SetEditorFromEntity { get; set; }
+    [Parameter] public required Func<TEntity, TId> GetEntityId { get; set; }
+    [Parameter] public required Func<TEntity, string> GetEntityDisplayName { get; set; }
+    [Parameter] public IValidator<TDto>? Validator { get; set; }
+
+    protected List<TEntity> Items { get; set; } = new();
+    protected bool IsLoading { get; set; } = true;
+    protected bool DialogVisible { get; set; }
+    protected bool IsEditing { get; set; }
+    protected bool IsSaving { get; set; }
+    protected TEntity? CurrentEntity { get; set; }
+
+    private DialogOptions DialogOptions { get; } = new() 
+    { 
+        MaxWidth = MaxWidth.Small, 
+        FullWidth = true
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadItems();
+    }
+
+    private async Task LoadItems()
+    {
+        IsLoading = true;
+        try
+        {
+            Items = (await Service.GetAllAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    protected void OpenCreateDialog()
+    {
+        CurrentEntity = null;
+        IsEditing = false;
+        DialogVisible = true;
+    }
+
+    protected async Task OpenEditDialog(TEntity entity)
+    {
+        CurrentEntity = entity;
+        await SetEditorFromEntity(entity);
+        IsEditing = true;
+        DialogVisible = true;
+    }
+
+    protected void CloseDialog()
+    {
+        DialogVisible = false;
+        CurrentEntity = null;
+    }
+
+    protected async Task SaveItem()
+    {
+        IsSaving = true;
+        try
+        {
+            var dto = await GetEditorDto();
+
+            // Client-side validation if validator is provided
+            if (Validator != null)
+            {
+                var validationResult = await Validator.ValidateAsync(dto);
+                if (!validationResult.IsValid)
+                {
+                    DisplayValidationErrors(validationResult);
+                    IsSaving = false;
+                    return;
+                }
+            }
+
+            if (IsEditing && CurrentEntity != null)
+            {
+                var id = GetEntityId(CurrentEntity);
+                await Service.UpdateAsync(id, dto);
+                Snackbar.Add($"{EntityName} actualizado exitosamente", Severity.Success);
+            }
+            else
+            {
+                await Service.CreateAsync(dto);
+                Snackbar.Add($"{EntityName} creado exitosamente", Severity.Success);
+            }
+
+            await LoadItems();
+            CloseDialog();
+        }
+        catch (HttpRequestException ex)
+        {
+            await HandleHttpError(ex);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error inesperado: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    protected async Task DeleteItem(TEntity entity)
+    {
+        var displayName = GetEntityDisplayName(entity);
+        var result = await DialogService.ShowMessageBox(
+            "Confirmar Eliminación",
+            $"¿Eliminar '{displayName}'?",
+            yesText: "Eliminar", 
+            cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            try
+            {
+                var id = GetEntityId(entity);
+                var deleted = await Service.DeleteAsync(id);
+                if (deleted)
+                {
+                    Snackbar.Add($"{EntityName} eliminado exitosamente", Severity.Success);
+                    await LoadItems();
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private void DisplayValidationErrors(ValidationResult validationResult)
+    {
+        foreach (var error in validationResult.Errors)
+        {
+            Snackbar.Add(error.ErrorMessage, Severity.Warning);
+        }
+    }
+
+    private async Task HandleHttpError(HttpRequestException ex)
+    {
+        // Try to parse HTTP status code from response
+        var statusCode = ex.StatusCode;
+        
+        if (statusCode.HasValue)
+        {
+            switch ((int)statusCode.Value)
+            {
+                case 400:
+                    Snackbar.Add("Error de validación: Verifique los datos ingresados", Severity.Warning);
+                    break;
+                case 404:
+                    Snackbar.Add($"{EntityName} no encontrado", Severity.Error);
+                    break;
+                case 409:
+                    Snackbar.Add($"Conflicto: {EntityName} ya existe o está en uso", Severity.Warning);
+                    break;
+                case 500:
+                    Snackbar.Add("Error del servidor. Por favor, contacte al administrador", Severity.Error);
+                    break;
+                default:
+                    Snackbar.Add($"Error HTTP {(int)statusCode.Value}: {ex.Message}", Severity.Error);
+                    break;
+            }
+        }
+        else
+        {
+            // Fallback to message parsing if StatusCode is not available
+            if (ex.Message.Contains("400") || ex.Message.Contains("BadRequest"))
+            {
+                Snackbar.Add("Error de validación: Verifique los datos ingresados", Severity.Warning);
+            }
+            else if (ex.Message.Contains("404") || ex.Message.Contains("NotFound"))
+            {
+                Snackbar.Add($"{EntityName} no encontrado", Severity.Error);
+            }
+            else if (ex.Message.Contains("409") || ex.Message.Contains("Conflict"))
+            {
+                Snackbar.Add($"Conflicto: {EntityName} ya existe o está en uso", Severity.Warning);
+            }
+            else if (ex.Message.Contains("500") || ex.Message.Contains("InternalServerError"))
+            {
+                Snackbar.Add("Error del servidor. Por favor, contacte al administrador", Severity.Error);
+            }
+            else
+            {
+                Snackbar.Add($"Error de conexión: {ex.Message}", Severity.Error);
+            }
+        }
+
+        await Task.CompletedTask;
+    }
+}

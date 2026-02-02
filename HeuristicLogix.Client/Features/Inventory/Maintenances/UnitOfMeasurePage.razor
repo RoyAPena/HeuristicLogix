@@ -1,0 +1,89 @@
+@page "/inventory/units-of-measure"
+@using HeuristicLogix.Shared.Models
+@using HeuristicLogix.Shared.DTOs
+@using HeuristicLogix.Shared.Services
+@using HeuristicLogix.Modules.Inventory.Services
+@using FluentValidation
+@inject IUnitOfMeasureMaintenanceService UnitOfMeasureService
+@inject IValidator<UnitOfMeasureUpsertDto> UnitOfMeasureValidator
+
+<PageTitle>Unidades de Medida - Mantenimiento</PageTitle>
+
+<MaintenanceBase TEntity="UnitOfMeasure"
+                 TDto="UnitOfMeasureUpsertDto"
+                 TId="int"
+                 Service="@_service"
+                 Title="Mantenimiento de Unidades de Medida"
+                 EntityName="Unidad de Medida"
+                 Icon="@Icons.Material.Filled.Straighten"
+                 CreateButtonText="Nueva Unidad"
+                 EmptyMessage="No hay unidades de medida registradas."
+                 GetEditorDto="@GetDto"
+                 SetEditorFromEntity="@SetEditor"
+                 GetEntityId="@(u => u.UnitOfMeasureId)"
+                 GetEntityDisplayName="@(u => u.UnitOfMeasureName)"
+                 Validator="@UnitOfMeasureValidator">
+    
+    <TableHeaders>
+        <MudTh>ID</MudTh>
+        <MudTh>Nombre</MudTh>
+        <MudTh>Símbolo</MudTh>
+    </TableHeaders>
+    
+    <TableColumns Context="unit">
+        <MudTd DataLabel="ID">@unit.UnitOfMeasureId</MudTd>
+        <MudTd DataLabel="Nombre">@unit.UnitOfMeasureName</MudTd>
+        <MudTd DataLabel="Símbolo"><strong>@unit.UnitOfMeasureSymbol</strong></MudTd>
+    </TableColumns>
+    
+    <EditorFields>
+        <MudTextField @bind-Value="_name"
+                      Label="Nombre de Unidad"
+                      Variant="Variant.Outlined"
+                      Required="true"
+                      MaxLength="200"
+                      HelperText="Ej: Kilogramo, Metro, Unidad"
+                      Class="mt-4" />
+        <MudTextField @bind-Value="_symbol"
+                      Label="Símbolo"
+                      Variant="Variant.Outlined"
+                      Required="true"
+                      MaxLength="20"
+                      HelperText="Ej: kg, m, un (letras, números, ³, ²)"
+                      Class="mt-4" />
+    </EditorFields>
+    
+</MaintenanceBase>
+
+@code {
+    private IBaseMaintenanceService<UnitOfMeasure, UnitOfMeasureUpsertDto, int> _service = null!;
+    private string _name = string.Empty;
+    private string _symbol = string.Empty;
+    private int _currentId;
+
+    protected override void OnInitialized()
+    {
+        _service = new BaseMaintenanceServiceAdapter<UnitOfMeasure, UnitOfMeasureUpsertDto, int>(UnitOfMeasureService);
+    }
+
+    private Task<UnitOfMeasureUpsertDto> GetDto() => Task.FromResult(
+        new UnitOfMeasureUpsertDto 
+        { 
+            UnitOfMeasureId = _currentId,
+            UnitOfMeasureName = _name,
+            UnitOfMeasureSymbol = _symbol
+        });
+
+    private Task SetEditor(UnitOfMeasure unit)
+    {
+        _currentId = unit.UnitOfMeasureId;
+        _name = unit.UnitOfMeasureName;
+        _symbol = unit.UnitOfMeasureSymbol;
+        return Task.CompletedTask;
+    }
+}
+
+
+
+
+

@@ -9,6 +9,8 @@
     <File Path="SpecKit\DOMAIN_LOGIC.md" />
     <File Path="SpecKit\UI_UX_SPEC.md" />
   </Folder>
+  <Project Path="HeuristicLogix.Api/HeuristicLogix.Api.csproj" />
   <Project Path="HeuristicLogix.Client\HeuristicLogix.Client.csproj" />
+  <Project Path="HeuristicLogix.Modules.Inventory/HeuristicLogix.Modules.Inventory.csproj" />
   <Project Path="HeuristicLogix.Shared\HeuristicLogix.Shared.csproj" />
 </Solution>

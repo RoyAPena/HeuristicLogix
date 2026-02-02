@@ -1,0 +1,77 @@
+@page "/inventory/categories"
+@using HeuristicLogix.Shared.Models
+@using HeuristicLogix.Shared.DTOs
+@using HeuristicLogix.Shared.Services
+@using HeuristicLogix.Modules.Inventory.Services
+@using FluentValidation
+@inject ICategoryMaintenanceService CategoryService
+@inject IValidator<CategoryUpsertDto> CategoryValidator
+
+<PageTitle>Categorías - Mantenimiento</PageTitle>
+
+<MaintenanceBase TEntity="Category"
+                 TDto="CategoryUpsertDto"
+                 TId="int"
+                 Service="@_service"
+                 Title="Mantenimiento de Categorías"
+                 EntityName="Categoría"
+                 Icon="@Icons.Material.Filled.Category"
+                 CreateButtonText="Nueva Categoría"
+                 EmptyMessage="No hay categorías registradas."
+                 GetEditorDto="@GetDto"
+                 SetEditorFromEntity="@SetEditor"
+                 GetEntityId="@(c => c.CategoryId)"
+                 GetEntityDisplayName="@(c => c.CategoryName)"
+                 Validator="@CategoryValidator">
+    
+    <TableHeaders>
+        <MudTh>ID</MudTh>
+        <MudTh>Nombre de Categoría</MudTh>
+    </TableHeaders>
+    
+    <TableColumns Context="category">
+        <MudTd DataLabel="ID">@category.CategoryId</MudTd>
+        <MudTd DataLabel="Nombre">@category.CategoryName</MudTd>
+    </TableColumns>
+    
+    <EditorFields>
+        <MudTextField @bind-Value="_name"
+                      Label="Nombre de Categoría"
+                      Variant="Variant.Outlined"
+                      Required="true"
+                      MaxLength="300"
+                      HelperText="Ingrese el nombre de la categoría"
+                      Class="mt-4" />
+    </EditorFields>
+    
+</MaintenanceBase>
+
+@code {
+    private IBaseMaintenanceService<Category, CategoryUpsertDto, int> _service = null!;
+    private string _name = string.Empty;
+    private int _currentId;
+
+    protected override void OnInitialized()
+    {
+        _service = new BaseMaintenanceServiceAdapter<Category, CategoryUpsertDto, int>(CategoryService);
+    }
+
+    private Task<CategoryUpsertDto> GetDto() => Task.FromResult(
+        new CategoryUpsertDto 
+        { 
+            CategoryId = _currentId, 
+            CategoryName = _name 
+        });
+
+    private Task SetEditor(Category category)
+    {
+        _currentId = category.CategoryId;
+        _name = category.CategoryName;
+        return Task.CompletedTask;
+    }
+}
+
+
+
+
+

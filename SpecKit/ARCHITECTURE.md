@@ -1,37 +1,39 @@
-\# Architecture Specification - HeuristicLogix
+# Architecture Specification - HeuristicLogix
 
+## 1. Technical Foundation
+- **Solution Name:** HeuristicLogix
+- **Framework:** .NET 10 (C# 14)
+- **Frontend:** Blazor WebAssembly Standalone
+- **UI Library:** MudBlazor (Open Source)
+- **Architecture Pattern:** Vertical Slice Architecture
+- **External APIs:** Google Maps Platform (Routes & Geocoding)
+- **Database:** SQL Server (On-Premise) / Azure SQL with Entity Framework Core.
 
+## 2. Naming & Semantic Standards (Strict)
+To ensure long-term maintainability and AI data readiness, we prioritize clarity over brevity.
 
-\## 1. Technical Foundation
+### 2.1 Identifiers and Columns
+- **No Abbreviations:** Use full, descriptive words. 
+    - *Bad:* `RNC`, `Qty`, `UoM`, `Desc`, `TaxId`.
+    - *Good:* `NationalTaxIdentificationNumber`, `CurrentStockQuantity`, `UnitOfMeasure`, `ItemDescription`, `TaxConfigurationId`.
+- **Primary Keys:** Table Name + `Id`. Example: `SupplierId`, `PurchaseInvoiceId`.
+- **Foreign Keys:** Must mirror the Target Table Primary Key name exactly.
 
-\- \*\*Solution Name:\*\* HeuristicLogix
+### 2.2 Database Schemas
+Logic must be partitioned into SQL Schemas:
+- **[Core]:** Shared configurations (Taxes, Global settings).
+- **[Inventory]:** Products, Brands, Categories, Unit Conversions.
+- **[Purchasing]:** Suppliers, Purchase Invoices, Staging tables.
+- **[Logistics]:** Trucks, Routes, Geocoding (Phase 2).
 
-\- \*\*Framework:\*\* .NET 10 (C# 14)
+## 3. Development & Data Standards
+- **Modern C#:** Use Primary Constructors, Collection Expressions, and Required Members.
+- **Precision:** Use `DECIMAL(18,4)` for monetary amounts and `DECIMAL(18,2)` for quantities.
+- **Enum Handling:** - **Strict Requirement:** All Enums must be persisted as **Strings**, never as Integers.
+    - **Implementation:** Use `JsonStringEnumConverter` for JSON and EF Core Value Converters for DB.
+- **Geospatial Constraint:** No 'Conduce' can be persisted without validated Latitude/Longitude coordinates.
 
-\- \*\*Frontend:\*\* Blazor WebAssembly Standalone
-
-\- \*\*UI Library:\*\* MudBlazor (Open Source)
-
-\- \*\*Architecture Pattern:\*\* Vertical Slice Architecture
-
-\- \*\*External APIs:\*\* Google Maps Platform (Routes \& Geocoding)
-
-\- \*\*Database:\*\* Azure SQL with Entity Framework Core
-
-
-
-\## 2. Development Standards
-
-\- \*\*Modern C#:\*\* Use Primary Constructors, Collection Expressions, and Required Members.
-
-\- \*\*Geospatial Constraint:\*\* No 'Conduce' can be persisted without validated Latitude/Longitude coordinates.
-
-\- \*\*AI Data Readiness:\*\* Schema must include `AIPredictedTime`, `ExpertDecisionTime`, and `ActualServiceTime` for future ML training.
-
-## Data Serialization & Persistence Standards
-
-### Enum Handling
-- **Strict Requirement:** All Enums must be treated and persisted as **Strings**, never as Integers.
-- **Implementation:** - For JSON serialization (API/Client): Use `JsonStringEnumConverter`.
-  - For Database persistence: Ensure the mapping layer (EF Core or Dapper) stores the string representation.
-- **Reasoning:** To prevent data corruption and confusion during ML training phases and to ensure historical data remains valid even if Enum integer values are reordered or added.
+## 4. AI & Performance Patterns
+- **AI Data Readiness:** Schema must include `AIPredictedTime`, `ExpertDecisionTime`, and `ActualServiceTime` for future ML training.
+- **Staging Area Pattern:** For heavy data ingestion (e.g., Mass Invoice Scanning), use Staging tables to prevent DB locking before final atomic commit.
+- **Concurrency:** Designed for **Read Committed Snapshot Isolation (RCSI)** to allow non-blocking reads.

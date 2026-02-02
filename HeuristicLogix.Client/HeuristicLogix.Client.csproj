@@ -11,10 +11,12 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.0" PrivateAssets="all" />
     <PackageReference Include="MudBlazor" Version="8.15.0" />
+    <PackageReference Include="FluentValidation" Version="11.3.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\HeuristicLogix.Shared\HeuristicLogix.Shared.csproj" />
+    <ProjectReference Include="..\HeuristicLogix.Modules.Inventory\HeuristicLogix.Modules.Inventory.csproj" />
   </ItemGroup>
 
 </Project>
