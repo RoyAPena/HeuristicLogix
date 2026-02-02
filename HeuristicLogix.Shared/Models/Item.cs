@@ -5,6 +5,7 @@ namespace HeuristicLogix.Shared.Models;
 /// Part of the Inventory schema.
 /// Tracks stock with Weighted Average Cost (WAC).
 /// Uses int ID for legacy compatibility.
+/// Supports multi-dimensional stock tracking: Current, Reserved, Staging, and Available.
 /// </summary>
 public class Item(
     int itemId,
@@ -16,7 +17,9 @@ public class Item(
     decimal costPricePerBaseUnit,
     decimal sellingPricePerBaseUnit,
     decimal minimumRequiredStockQuantity,
-    decimal currentStockQuantity)
+    decimal currentStockQuantity,
+    decimal reservedStockQuantity,
+    decimal stagingStockQuantity)
 {
     /// <summary>
     /// Primary key: ItemId per Architecture standards.
@@ -87,10 +90,52 @@ public class Item(
 
     /// <summary>
     /// Current stock quantity in the BASE unit.
+    /// Represents physically verified stock in the warehouse.
     /// READ-ONLY for UI: Only updated via formal transactions.
     /// Precision: DECIMAL(18,2).
     /// </summary>
     public required decimal CurrentStockQuantity { get; set; } = currentStockQuantity;
+
+    /// <summary>
+    /// Reserved stock quantity in the BASE unit.
+    /// Stock already invoiced or with a pending "Conduce" (delivery note) that hasn't left the warehouse.
+    /// This stock is committed to customers but not yet physically delivered.
+    /// Precision: DECIMAL(18,4).
+    /// </summary>
+    public required decimal ReservedStockQuantity { get; set; } = reservedStockQuantity;
+
+    /// <summary>
+    /// Staging stock quantity in the BASE unit.
+    /// Stock that has physically arrived (via Purchasing Staging) but hasn't been verified/posted to official inventory.
+    /// This represents goods in receiving/inspection that are not yet available for sale.
+    /// Precision: DECIMAL(18,4).
+    /// </summary>
+    public required decimal StagingStockQuantity { get; set; } = stagingStockQuantity;
+
+    /// <summary>
+    /// Physical warehouse location code (e.g., "P1-T10-A" for Pasillo 1, Torre 10, Anaquel A).
+    /// Optional field for warehouse management.
+    /// </summary>
+    public string? LocationCode { get; set; }
+
+    /// <summary>
+    /// URL reference for the product image.
+    /// Can point to internal storage, CDN, or external resource.
+    /// Optional field for UI display purposes.
+    /// </summary>
+    public string? ImageUrl { get; set; }
+
+    // ============================================================
+    // CALCULATED PROPERTIES (Business Logic)
+    // ============================================================
+
+    /// <summary>
+    /// Available stock quantity for sales commitment.
+    /// Calculated as: CurrentStockQuantity - ReservedStockQuantity.
+    /// This represents the actual stock that the sales department can commit to customers.
+    /// READ-ONLY: Computed at runtime.
+    /// </summary>
+    public decimal AvailableStockQuantity => CurrentStockQuantity - ReservedStockQuantity;
 
     // ============================================================
     // NAVIGATION PROPERTIES (EF Core Relationships)
@@ -124,7 +169,7 @@ public class Item(
     /// <summary>
     /// Parameterless constructor for EF Core.
     /// </summary>
-    public Item() : this(0, string.Empty, string.Empty, 0, Guid.Empty, 0, 0, 0, 0, 0)
+    public Item() : this(0, string.Empty, string.Empty, 0, Guid.Empty, 0, 0, 0, 0, 0, 0, 0)
     {
     }
 }

@@ -341,7 +341,11 @@ public class DataSeederService
                 CostPricePerBaseUnit = 450.0000m, // DECIMAL(18,4)
                 SellingPricePerBaseUnit = 650.0000m, // DECIMAL(18,4)
                 MinimumRequiredStockQuantity = 100.00m, // DECIMAL(18,2)
-                CurrentStockQuantity = 500.00m // DECIMAL(18,2)
+                CurrentStockQuantity = 500.00m, // DECIMAL(18,2)
+                ReservedStockQuantity = 0m, // No reservations yet
+                StagingStockQuantity = 0m, // No staging yet
+                LocationCode = "P1-T01-A", // Warehouse location
+                ImageUrl = "/images/products/cement-portland-50kg.jpg"
             },
             
             // Steel Rebar
@@ -358,7 +362,11 @@ public class DataSeederService
                 CostPricePerBaseUnit = 120.5000m, // DECIMAL(18,4)
                 SellingPricePerBaseUnit = 175.7500m, // DECIMAL(18,4)
                 MinimumRequiredStockQuantity = 50.00m, // DECIMAL(18,2)
-                CurrentStockQuantity = 200.00m // DECIMAL(18,2)
+                CurrentStockQuantity = 200.00m, // DECIMAL(18,2)
+                ReservedStockQuantity = 0m, // No reservations yet
+                StagingStockQuantity = 0m, // No staging yet
+                LocationCode = "P2-T05-B", // Warehouse location
+                ImageUrl = null // No image yet
             }
         };
 
